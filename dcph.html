@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Church Reports Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --gold: #C9A84C;
+    --gold-light: #E8C96A;
+    --dark: #0F0E0B;
+    --surface: #1A1915;
+    --card: #221F18;
+    --border: rgba(201,168,76,0.18);
+    --text: #F0EAD6;
+    --muted: rgba(240,234,214,0.5);
+    --mvp: #6AA3C9;
+    --mvp2: #4A7FA0;
+    --dca1: #C96A6A;
+    --dca2: #A07550;
+    --dli: #6AC97A;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--dark);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 40px 24px 60px;
+    background-image: radial-gradient(ellipse at 20% 0%, rgba(201,168,76,0.06) 0%, transparent 60%),
+                      radial-gradient(ellipse at 80% 100%, rgba(106,163,201,0.05) 0%, transparent 60%);
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 52px;
+    animation: fadeUp 0.8s ease both;
+  }
+
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 12px;
+  }
+
+  h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(32px, 6vw, 56px);
+    font-weight: 900;
+    line-height: 1.05;
+    color: var(--text);
+  }
+
+  h1 span { color: var(--gold); }
+
+  .subtitle {
+    margin-top: 12px;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 300;
+    letter-spacing: 0.5px;
+  }
+
+  .divider {
+    width: 48px;
+    height: 2px;
+    background: var(--gold);
+    margin: 20px auto 0;
+    border-radius: 2px;
+  }
+
+  /* SUMMARY STRIP */
+  .summary-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 40px;
+    animation: fadeUp 0.9s ease 0.1s both;
+  }
+
+  .stat-pill {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 16px;
+    text-align: center;
+  }
+
+  .stat-pill .val {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .stat-pill .lbl {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  .pill-mvp .val { color: var(--mvp); }
+  .pill-dca1 .val { color: var(--dca1); }
+  .pill-dca2 .val { color: var(--dca2); }
+  .pill-dli .val { color: var(--dli); }
+
+  /* SECTION HEADERS */
+  .section-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    animation: fadeUp 0.8s ease both;
+  }
+
+  .section-label .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .section-label h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-weight: 700;
+  }
+
+  .section-label .tag {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* CARDS */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px 24px;
+    margin-bottom: 28px;
+    animation: fadeUp 0.8s ease both;
+  }
+
+  /* CHART AREA */
+  .chart-wrap {
+    position: relative;
+    height: 220px;
+    width: 100%;
+  }
+
+  .chart-canvas {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* BAR CHART CUSTOM */
+  .bar-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 180px;
+    padding-bottom: 28px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .bar-chart::-webkit-scrollbar { display: none; }
+
+  .bar-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    flex: 1;
+    min-width: 40px;
+  }
+
+  .bar-group .bars {
+    display: flex;
+    gap: 3px;
+    align-items: flex-end;
+    height: 140px;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .bar {
+    width: 14px;
+    border-radius: 4px 4px 0 0;
+    min-height: 2px;
+    transition: opacity 0.2s;
+    position: relative;
+    cursor: pointer;
+  }
+
+  .bar:hover::after {
+    content: attr(data-val);
+    position: absolute;
+    top: -22px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--gold);
+    color: var(--dark);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 5px;
+    border-radius: 4px;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .bar-group .month-lbl {
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    text-align: center;
+    margin-top: 6px;
+    white-space: nowrap;
+  }
+
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .legend-dot {
+    width: 8px; height: 8px;
+    border-radius: 2px;
+  }
+
+  /* TABLE */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  th {
+    text-align: left;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    padding: 0 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 11px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  td.num {
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 20px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  .badge-up { background: rgba(106,201,122,0.15); color: #6AC97A; }
+  .badge-dn { background: rgba(201,106,106,0.15); color: #C96A6A; }
+  .badge-na { background: rgba(255,255,255,0.07); color: var(--muted); }
+
+  /* DLI CARD */
+  .dli-row {
+    display: flex;
+    gap: 16px;
+  }
+
+  .dli-block {
+    flex: 1;
+    background: rgba(106,201,122,0.06);
+    border: 1px solid rgba(106,201,122,0.18);
+    border-radius: 14px;
+    padding: 20px;
+    text-align: center;
+  }
+
+  .dli-block .year {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--dli);
+    margin-bottom: 8px;
+  }
+
+  .dli-block .count {
+    font-family: 'Playfair Display', serif;
+    font-size: 42px;
+    font-weight: 700;
+    color: var(--dli);
+    line-height: 1;
+  }
+
+  .dli-block .sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  .dli-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: var(--dli);
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .section-wrap { animation: fadeUp 0.8s ease 0.15s both; }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .tab {
+    padding: 8px 18px;
+    border-radius: 30px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    transition: all 0.2s;
+  }
+
+  .tab.active-mvp { background: rgba(106,163,201,0.15); border-color: var(--mvp); color: var(--mvp); }
+  .tab.active-dca { background: rgba(201,106,106,0.12); border-color: var(--dca1); color: var(--dca1); }
+
+  footer {
+    text-align: center;
+    margin-top: 48px;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Church Growth Analytics</div>
+  <h1>Ministry <span>Reports</span></h1>
+  <p class="subtitle">June 2025 – May 2026 &nbsp;·&nbsp; MVP &nbsp;|&nbsp; DCA &nbsp;|&nbsp; DLI</p>
+  <div class="divider"></div>
+</header>
+
+<!-- Summary Pills -->
+<div class="summary-strip" id="pills"></div>
+
+<!-- MVP SECTION -->
+<div class="section-wrap">
+  <div class="section-label">
+    <div class="dot" style="background:var(--mvp)"></div>
+    <h2 style="color:var(--mvp)">MVP Report</h2>
+    <span class="tag">First Timers & Second Timers</span>
+  </div>
+
+  <div class="card" style="border-color:rgba(106,163,201,0.25)">
+    <div class="bar-chart" id="mvpChart"></div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--mvp)"></div> First Timers</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--mvp2)"></div> Second Timers</div>
+    </div>
+  </div>
+
+  <div class="card" style="border-color:rgba(106,163,201,0.18)">
+    <table>
+      <thead><tr>
+        <th>Month</th><th>First Timers</th><th>Second Timers</th><th>Total</th><th>Trend</th>
+      </tr></thead>
+      <tbody id="mvpTable"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- DCA SECTION -->
+<div class="section-wrap" style="margin-top:44px">
+  <div class="section-label">
+    <div class="dot" style="background:var(--dca1)"></div>
+    <h2 style="color:var(--dca1)">DCA Report</h2>
+    <span class="tag">Foundation School & Maturity</span>
+  </div>
+
+  <div class="card" style="border-color:rgba(201,106,106,0.25)">
+    <div class="bar-chart" id="dcaChart"></div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--dca1)"></div> Foundation School</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--dca2)"></div> Maturity</div>
+    </div>
+  </div>
+
+  <div class="card" style="border-color:rgba(201,106,106,0.18)">
+    <table>
+      <thead><tr>
+        <th>Month</th><th>Foundation</th><th>Maturity</th><th>Total</th><th>Trend</th>
+      </tr></thead>
+      <tbody id="dcaTable"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- RETENTION RATE SECTION (Attraction parts removed) -->
+<div class="section-wrap" style="margin-top:44px">
+  <div class="section-label">
+    <div class="dot" style="background:var(--gold)"></div>
+    <h2 style="color:var(--gold)">Retention Rate</h2>
+    <span class="tag">Monthly Retention — MVP</span>
+  </div>
+
+  <div class="card" style="border-color:rgba(201,168,76,0.25)">
+    <div class="bar-chart" id="rateChart"></div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#A084CA"></div> Retention Rate (Second Timers / First Timers)</div>
+    </div>
+  </div>
+
+  <div class="card" style="border-color:rgba(201,168,76,0.18)">
+    <table>
+      <thead><tr>
+        <th>Month</th><th>First Timers</th><th>Second Timers</th><th>Retention Rate</th>
+      </tr></thead>
+      <tbody id="rateTable"></tbody>
+    </table>
+  </div>
+
+  <!-- Retention average only -->
+  <div style="display:flex;gap:14px;margin-top:4px" id="rateAvgs"></div>
+</div>
+
+<!-- DLI SECTION -->
+<div class="section-wrap" style="margin-top:44px">
+  <div class="section-label">
+    <div class="dot" style="background:var(--dli)"></div>
+    <h2 style="color:var(--dli)">DLI Report</h2>
+    <span class="tag">Basic — Year-on-Year</span>
+  </div>
+
+  <div class="card" style="border-color:rgba(106,201,122,0.25)">
+    <div class="dli-row">
+      <div class="dli-block">
+        <div class="year">2025</div>
+        <div class="count">62</div>
+        <div class="sub">Enrolments</div>
+      </div>
+      <div class="dli-arrow">→</div>
+      <div class="dli-block">
+        <div class="year">2026</div>
+        <div class="count">76</div>
+        <div class="sub">Enrolments</div>
+      </div>
+    </div>
+    <p style="margin-top:18px;font-size:12px;color:var(--muted);text-align:center">
+      📈 Growth of <strong style="color:var(--dli)">+14 enrolments</strong> &nbsp;(+22.6% YoY)
+    </p>
+  </div>
+</div>
+
+<footer>Generated · May 2026</footer>
+
+<script>
+const mvpData = [
+  { m: 'Aug 25', ft: 157, st: 20 },
+  { m: 'Sep 25', ft: 82,  st: 23 },
+  { m: 'Oct 25', ft: 135, st: 51 },
+  { m: 'Nov 25', ft: 115, st: 28 },
+  { m: 'Dec 25', ft: 56,  st: 7  },
+  { m: 'Jan 26', ft: 168, st: 23 },
+  { m: 'Feb 26', ft: 109, st: 33 },
+  { m: 'Mar 26', ft: 136, st: 29 },
+  { m: 'Apr 26', ft: 127, st: 25 },
+  { m: 'May 26', ft: 82,  st: 21 },
+];
+
+const dcaData = [
+  { m: 'Jun 25', f: 55,  mat: 27 },
+  { m: 'Jul 25', f: 47,  mat: 43 },
+  { m: 'Aug 25', f: 41,  mat: 31 },
+  { m: 'Sep 25', f: 55,  mat: 15 },
+  { m: 'Oct 25', f: 41,  mat: 24 },
+  { m: 'Nov 25', f: 53,  mat: 29 },
+  { m: 'Dec 25', f: 6,   mat: 3  },
+  { m: 'Jan 26', f: 0,   mat: 4  },
+  { m: 'Feb 26', f: 72,  mat: 13 },
+  { m: 'Mar 26', f: 105, mat: 57 },
+  { m: 'Apr 26', f: 40,  mat: 39 },
+  { m: 'May 26', f: 46,  mat: 29 },
+];
+
+function buildBarChart(containerId, data, key1, key2, color1, color2, maxOverride) {
+  const container = document.getElementById(containerId);
+  const allVals = data.flatMap(d => [d[key1], d[key2]]);
+  const max = maxOverride || Math.max(...allVals);
+
+  data.forEach(d => {
+    const group = document.createElement('div');
+    group.className = 'bar-group';
+
+    const bars = document.createElement('div');
+    bars.className = 'bars';
+
+    const b1 = document.createElement('div');
+    b1.className = 'bar';
+    b1.style.height = `${(d[key1]/max)*130}px`;
+    b1.style.background = color1;
+    b1.setAttribute('data-val', d[key1]);
+
+    const b2 = document.createElement('div');
+    b2.className = 'bar';
+    b2.style.height = `${(d[key2]/max)*130}px`;
+    b2.style.background = color2;
+    b2.setAttribute('data-val', d[key2]);
+
+    bars.appendChild(b1);
+    bars.appendChild(b2);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'month-lbl';
+    lbl.textContent = d.m;
+
+    group.appendChild(bars);
+    group.appendChild(lbl);
+    container.appendChild(group);
+  });
+}
+
+function trendBadge(cur, prev) {
+  if (prev === undefined) return '<span class="badge badge-na">—</span>';
+  const diff = cur - prev;
+  if (diff > 0) return `<span class="badge badge-up">+${diff}</span>`;
+  if (diff < 0) return `<span class="badge badge-dn">${diff}</span>`;
+  return `<span class="badge badge-na">0</span>`;
+}
+
+function buildTable(tbodyId, data, k1, k2, c1, c2) {
+  const tbody = document.getElementById(tbodyId);
+  data.forEach((d, i) => {
+    const total = d[k1] + d[k2];
+    const prevTotal = i > 0 ? data[i-1][k1] + data[i-1][k2] : undefined;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:500">${d.m}</td>
+      <td class="num" style="color:${c1}">${d[k1]}</td>
+      <td class="num" style="color:${c2}">${d[k2]}</td>
+      <td class="num">${total}</td>
+      <td>${trendBadge(total, prevTotal)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// Summary pills
+const pillsData = [
+  { val: mvpData.reduce((s,d)=>s+d.ft,0), lbl: 'Total First Timers', cls: 'pill-mvp' },
+  { val: mvpData.reduce((s,d)=>s+d.st,0), lbl: 'Total Second Timers', cls: 'pill-mvp' },
+  { val: dcaData.reduce((s,d)=>s+d.f,0), lbl: 'Foundation Total', cls: 'pill-dca1' },
+  { val: dcaData.reduce((s,d)=>s+d.mat,0), lbl: 'Maturity Total', cls: 'pill-dca2' },
+];
+const pillsEl = document.getElementById('pills');
+pillsData.forEach(p => {
+  pillsEl.innerHTML += `<div class="stat-pill ${p.cls}"><div class="val">${p.val}</div><div class="lbl">${p.lbl}</div></div>`;
+});
+
+// Retention-only data
+const rateData = mvpData.map(d => ({
+  m: d.m,
+  retention: Math.round((d.st / d.ft) * 100),
+  ft: d.ft,
+  st: d.st,
+}));
+
+// Retention-only bar chart
+function buildRateChart(containerId, data) {
+  const container = document.getElementById(containerId);
+  data.forEach(d => {
+    const group = document.createElement('div');
+    group.className = 'bar-group';
+    const bars = document.createElement('div');
+    bars.className = 'bars';
+
+    const b = document.createElement('div');
+    b.className = 'bar';
+    b.style.height = `${Math.min(d.retention, 100) / 100 * 130}px`;
+    b.style.background = '#A084CA';
+    b.setAttribute('data-val', d.retention + '%');
+
+    bars.appendChild(b);
+    const lbl = document.createElement('div');
+    lbl.className = 'month-lbl';
+    lbl.textContent = d.m;
+    group.appendChild(bars);
+    group.appendChild(lbl);
+    container.appendChild(group);
+  });
+}
+
+// Retention-only table
+function buildRateTable() {
+  const tbody = document.getElementById('rateTable');
+  rateData.forEach(d => {
+    const retColor = d.retention >= 30 ? 'var(--dli)' : d.retention >= 15 ? 'var(--gold)' : 'var(--dca1)';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:500">${d.m}</td>
+      <td class="num" style="color:var(--mvp)">${d.ft}</td>
+      <td class="num" style="color:var(--mvp2)">${d.st}</td>
+      <td><span class="badge" style="background:${retColor}22;color:${retColor};font-size:12px;padding:3px 10px;border-radius:20px">${d.retention}%</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// Retention average only
+function buildRateAvgs() {
+  const avgRet = Math.round(rateData.reduce((s,d) => s + d.retention, 0) / rateData.length);
+  const el = document.getElementById('rateAvgs');
+  el.innerHTML = `
+    <div class="stat-pill" style="flex:1;border-color:rgba(160,132,202,0.3)">
+      <div class="val" style="color:#A084CA">${avgRet}%</div>
+      <div class="lbl">Avg Retention Rate</div>
+    </div>
+  `;
+}
+
+buildRateChart('rateChart', rateData);
+buildRateTable();
+buildRateAvgs();
+
+buildBarChart('mvpChart', mvpData, 'ft', 'st', 'var(--mvp)', 'var(--mvp2)');
+buildBarChart('dcaChart', dcaData, 'f', 'mat', 'var(--dca1)', 'var(--dca2)');
+buildTable('mvpTable', mvpData, 'ft', 'st', 'var(--mvp)', 'var(--mvp2)');
+buildTable('dcaTable', dcaData, 'f', 'mat', 'var(--dca1)', 'var(--dca2)');
+</script>
+</body>
+</html>
