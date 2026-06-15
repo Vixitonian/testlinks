@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notepad</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f5f0;
+    --sidebar-bg: #eeeee8;
+    --sidebar-border: #d8d8d0;
+    --card-bg: #fff;
+    --card-hover: #f0f0ea;
+    --card-active: #e0e8ff;
+    --accent: #4a6cf7;
+    --accent-dark: #3355d4;
+    --danger: #e55;
+    --danger-dark: #c33;
+    --text: #222;
+    --muted: #888;
+    --editor-bg: #fff;
+    --title-border: #ddd;
+    --radius: 8px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    height: 100dvh;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ── */
+  #sidebar {
+    width: 260px;
+    min-width: 200px;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  #sidebar-header {
+    padding: 16px 14px 12px;
+    border-bottom: 1px solid var(--sidebar-border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  #sidebar-header h1 {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    flex: 1;
+  }
+
+  #btn-new {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .15s;
+  }
+  #btn-new:hover { background: var(--accent-dark); }
+
+  #notes-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 6px;
+  }
+
+  .note-item {
+    padding: 10px 10px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background .12s;
+    margin-bottom: 2px;
+  }
+  .note-item:hover { background: var(--card-hover); }
+  .note-item.active { background: var(--card-active); }
+
+  .note-item-title {
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .note-item-date {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  #empty-state {
+    padding: 32px 16px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  /* ── Editor ── */
+  #editor-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--editor-bg);
+    overflow: hidden;
+  }
+
+  #editor-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--title-border);
+  }
+
+  #title-input {
+    flex: 1;
+    font-size: 17px;
+    font-weight: 700;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--text);
+    font-family: var(--font);
+  }
+  #title-input::placeholder { color: #bbb; }
+
+  #btn-save {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 7px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+    white-space: nowrap;
+  }
+  #btn-save:hover { background: var(--accent-dark); }
+  #btn-save:disabled { background: #aac; cursor: default; }
+
+  #btn-delete {
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+    white-space: nowrap;
+  }
+  #btn-delete:hover { background: var(--danger); color: #fff; }
+
+  #content-textarea {
+    flex: 1;
+    resize: none;
+    border: none;
+    outline: none;
+    padding: 20px;
+    font-size: 15px;
+    line-height: 1.7;
+    font-family: var(--font);
+    color: var(--text);
+    background: transparent;
+  }
+  #content-textarea::placeholder { color: #ccc; }
+
+  #placeholder-pane {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 15px;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  #placeholder-pane svg { opacity: .25; }
+
+  /* ── Status bar ── */
+  #status-bar {
+    position: fixed;
+    bottom: 16px;
+    right: 20px;
+    background: #333;
+    color: #fff;
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    opacity: 0;
+    transition: opacity .3s;
+    pointer-events: none;
+  }
+  #status-bar.show { opacity: 1; }
+
+  /* ── Loading ── */
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid #ccc;
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<aside id="sidebar">
+  <div id="sidebar-header">
+    <h1>📝 Notepad</h1>
+    <button id="btn-new">+ New</button>
+  </div>
+  <div id="notes-list">
+    <div id="empty-state">No notes yet.<br>Click <strong>+ New</strong> to create one.</div>
+  </div>
+</aside>
+
+<main id="editor-pane" style="display:none">
+  <div id="editor-toolbar">
+    <input id="title-input" type="text" placeholder="Note title…" maxlength="255">
+    <button id="btn-save">Save</button>
+    <button id="btn-delete">Delete</button>
+  </div>
+  <textarea id="content-textarea" placeholder="Start writing…"></textarea>
+</main>
+
+<div id="placeholder-pane">
+  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>
+  <span>Select a note or create a new one</span>
+</div>
+
+<div id="status-bar"></div>
+
+<script>
+const SB_URL = 'http://supabein.dxinnovationhub.com/api/v1';
+const SB_KEY = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmVpbiIsInR5cGUiOiJhbm9uIiwicGlkIjoyfQ.nZw9YRk93LoFGFx1Na5Hzef_L7_AXh_FZKro7a7B9jA';
+const SB_PID = 2;
+
+let notes = [];
+let activeId = null;
+let isDirty = false;
+
+const notesList      = document.getElementById('notes-list');
+const editorPane     = document.getElementById('editor-pane');
+const placeholderPane= document.getElementById('placeholder-pane');
+const titleInput     = document.getElementById('title-input');
+const contentArea    = document.getElementById('content-textarea');
+const btnSave        = document.getElementById('btn-save');
+const btnDelete      = document.getElementById('btn-delete');
+const btnNew         = document.getElementById('btn-new');
+const statusBar      = document.getElementById('status-bar');
+
+let statusTimer;
+function showStatus(msg) {
+  statusBar.textContent = msg;
+  statusBar.classList.add('show');
+  clearTimeout(statusTimer);
+  statusTimer = setTimeout(() => statusBar.classList.remove('show'), 2200);
+}
+
+function authHeaders(extra = {}) {
+  return { 'Authorization': `Bearer ${SB_KEY}`, ...extra };
+}
+
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(`${SB_URL}/data/${SB_PID}/${path}`, opts);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+function relativeTime(isoStr) {
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
+function renderList() {
+  if (!notes.length) {
+    notesList.innerHTML = '<div id="empty-state">No notes yet.<br>Click <strong>+ New</strong> to create one.</div>';
+    return;
+  }
+  notesList.innerHTML = notes.map(n => `
+    <div class="note-item ${n.id === activeId ? 'active' : ''}" data-id="${n.id}">
+      <div class="note-item-title">${escHtml(n.title || 'Untitled')}</div>
+      <div class="note-item-date">${relativeTime(n.created_at)}</div>
+    </div>
+  `).join('');
+  notesList.querySelectorAll('.note-item').forEach(el => {
+    el.addEventListener('click', () => openNote(parseInt(el.dataset.id)));
+  });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function loadNotes() {
+  try {
+    const data = await apiFetch('notes?limit=100&order=created_at.desc', {
+      headers: authHeaders()
+    });
+    notes = Array.isArray(data) ? data : (data.rows || data.data || []);
+    renderList();
+  } catch (e) {
+    showStatus('Failed to load notes');
+  }
+}
+
+function showEditor() {
+  editorPane.style.display = 'flex';
+  placeholderPane.style.display = 'none';
+}
+
+function showPlaceholder() {
+  editorPane.style.display = 'none';
+  placeholderPane.style.display = 'flex';
+}
+
+function openNote(id) {
+  const note = notes.find(n => n.id === id);
+  if (!note) return;
+  activeId = id;
+  titleInput.value = note.title || '';
+  contentArea.value = note.content || '';
+  isDirty = false;
+  btnDelete.style.display = '';
+  showEditor();
+  renderList();
+  titleInput.focus();
+}
+
+function newNote() {
+  activeId = null;
+  titleInput.value = '';
+  contentArea.value = '';
+  isDirty = false;
+  btnDelete.style.display = 'none';
+  showEditor();
+  renderList();
+  titleInput.focus();
+}
+
+async function saveNote() {
+  const title = titleInput.value.trim();
+  if (!title) { titleInput.focus(); showStatus('Please add a title'); return; }
+  const body = { title, content: contentArea.value };
+  btnSave.disabled = true;
+  try {
+    if (activeId) {
+      await apiFetch(`notes/${activeId}`, {
+        method: 'PATCH',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(body)
+      });
+      const note = notes.find(n => n.id === activeId);
+      if (note) Object.assign(note, body);
+      showStatus('Saved');
+    } else {
+      const created = await apiFetch('notes', {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(body)
+      });
+      activeId = created.id;
+      btnDelete.style.display = '';
+      await loadNotes();
+      showStatus('Note created');
+    }
+    isDirty = false;
+    renderList();
+  } catch (e) {
+    showStatus('Save failed');
+  } finally {
+    btnSave.disabled = false;
+  }
+}
+
+async function deleteNote() {
+  if (!activeId) return;
+  if (!confirm('Delete this note?')) return;
+  try {
+    await apiFetch(`notes/${activeId}`, {
+      method: 'DELETE',
+      headers: authHeaders()
+    });
+    notes = notes.filter(n => n.id !== activeId);
+    activeId = null;
+    showPlaceholder();
+    renderList();
+    showStatus('Deleted');
+  } catch (e) {
+    showStatus('Delete failed');
+  }
+}
+
+// Wire events
+btnNew.addEventListener('click', newNote);
+btnSave.addEventListener('click', saveNote);
+btnDelete.addEventListener('click', deleteNote);
+titleInput.addEventListener('input', () => { isDirty = true; });
+contentArea.addEventListener('input', () => { isDirty = true; });
+
+// Ctrl/Cmd+S to save
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    saveNote();
+  }
+});
+
+// Init
+btnDelete.style.display = 'none';
+loadNotes();
+</script>
+</body>
+</html>
