@@ -2,7 +2,7 @@ import json
 import urllib.request
 import urllib.error
 
-API_KEY = "b13212f7627d4f8da344d00c85717ef6"
+API_KEY = "b13212f7627d4f8da344d00c85717ef6.jTjVrTsBXt3CEQVf"
 BASE_URL = "https://api.z.ai/api/paas/v4/chat/completions"
 
 payload = {
