@@ -12,8 +12,9 @@ import os
 import sys
 
 API_KEY = os.environ.get("GEMINI_API_KEY", "")
-MODEL = "gemini-2.0-flash"
-BASE_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
+PREFERRED_MODEL = "gemini-3.5-flash"
+FALLBACK_MODEL = "gemini-2.5-flash"
+MODEL = PREFERRED_MODEL  # resolved at runtime; falls back if 503
 
 SYSTEM_INSTRUCTION = (
     "You are an expert software engineer. "
@@ -45,9 +46,12 @@ DEMOS = [
 ]
 
 
-def call_gemini(prompt: str) -> dict:
+def call_gemini(prompt: str, model: str = None) -> dict:
     if not API_KEY:
         raise ValueError("Set the GEMINI_API_KEY environment variable first.")
+
+    target = model or MODEL
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{target}:generateContent"
 
     payload = {
         "system_instruction": {
@@ -66,7 +70,7 @@ def call_gemini(prompt: str) -> dict:
     }
 
     req = urllib.request.Request(
-        BASE_URL,
+        url,
         data=json.dumps(payload).encode("utf-8"),
         headers={
             "Content-Type": "application/json",
@@ -75,8 +79,16 @@ def call_gemini(prompt: str) -> dict:
         method="POST",
     )
 
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return json.loads(resp.read().decode("utf-8")), target
+    except urllib.error.HTTPError as e:
+        body = json.loads(e.read().decode("utf-8"))
+        # Auto-fallback: if preferred model is overloaded, retry with fallback
+        if e.code == 503 and target == PREFERRED_MODEL:
+            print(f"  [{PREFERRED_MODEL} overloaded — falling back to {FALLBACK_MODEL}]")
+            return call_gemini(prompt, model=FALLBACK_MODEL)
+        raise
 
 
 def extract_text(response: dict) -> str:
@@ -94,10 +106,11 @@ def run_demo(label: str, prompt: str) -> None:
     print(f"PROMPT: {prompt}\n")
 
     try:
-        data = call_gemini(prompt)
+        data, used_model = call_gemini(prompt)
         text = extract_text(data)
         usage = extract_usage(data)
 
+        print(f"[model: {used_model}]")
         print(text)
         print(
             f"\n[Tokens — prompt: {usage.get('promptTokenCount', '?')}, "
@@ -120,7 +133,7 @@ if __name__ == "__main__":
         print("Then run:  GEMINI_API_KEY=your_key python3 test_gemini_codegen.py")
         sys.exit(1)
 
-    print(f"Model : {MODEL}")
+    print(f"Model : {PREFERRED_MODEL} (fallback: {FALLBACK_MODEL})")
     print(f"Limits: 1,500 req/day · 1,000,000 tokens/min · FREE")
 
     for demo in DEMOS:
