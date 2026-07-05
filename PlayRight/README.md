@@ -195,20 +195,106 @@ curl -s -X POST https://playright.onrender.com/run \
   }'
 ```
 
-## 5. Calling PlayRight from Laravel
+## 5. Calling PlayRight
 
-Use Laravel's HTTP client (`Illuminate\Support\Facades\Http`), which is
-available out of the box on any Laravel app (works fine under cPanel/PHP-FPM
-as long as the `curl` PHP extension is enabled, which it is by default on
-Namecheap's shared hosting).
+PlayRight is a plain HTTP+JSON API — anything that can send a POST request
+can call it. No SDK, no framework required.
+
+> **Never call it directly from browser-side JS.** That would put your
+> `API_KEY` in public page source. Only call it from server-side code (a PHP
+> script, a Node backend, a Laravel job/controller, etc.).
+
+### Plain JavaScript (Node.js, `fetch`)
+
+Node 18+ has `fetch` built in — no dependency needed.
+
+```js
+const response = await fetch('https://playright-jvfn.onrender.com/run', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': process.env.PLAYRIGHT_API_KEY,
+  },
+  body: JSON.stringify({
+    url: 'https://example.com/login',
+    actions: [
+      { type: 'goto' },
+      { type: 'fill', selector: '#email', value: email },
+      { type: 'fill', selector: '#password', value: password },
+      { type: 'click', selector: '#submit' },
+      { type: 'wait', selector: '#dashboard' },
+      { type: 'extractText', selector: '#dashboard h1', key: 'welcomeText' },
+    ],
+  }),
+});
+
+const result = await response.json();
+if (result.success) {
+  console.log(result.data.welcomeText);
+} else {
+  console.error('PlayRight run failed:', result.errors);
+}
+```
+
+### Plain PHP (`curl`, no framework)
+
+Works on any PHP host with the `curl` extension enabled — including
+Namecheap cPanel shared hosting, with no Laravel or Composer dependency.
+
+```php
+<?php
+
+$apiKey = getenv('PLAYRIGHT_API_KEY');
+$endpoint = 'https://playright-jvfn.onrender.com/run';
+
+$payload = json_encode([
+    'url' => 'https://example.com/login',
+    'actions' => [
+        ['type' => 'goto'],
+        ['type' => 'fill', 'selector' => '#email', 'value' => $email],
+        ['type' => 'fill', 'selector' => '#password', 'value' => $password],
+        ['type' => 'click', 'selector' => '#submit'],
+        ['type' => 'wait', 'selector' => '#dashboard'],
+        ['type' => 'extractText', 'selector' => '#dashboard h1', 'key' => 'welcomeText'],
+    ],
+]);
+
+$ch = curl_init($endpoint);
+curl_setopt_array($ch, [
+    CURLOPT_POST => true,
+    CURLOPT_POSTFIELDS => $payload,
+    CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
+        'x-api-key: ' . $apiKey,
+    ],
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_TIMEOUT => 30,
+]);
+
+$responseBody = curl_exec($ch);
+if ($responseBody === false) {
+    throw new RuntimeException('PlayRight request failed: ' . curl_error($ch));
+}
+curl_close($ch);
+
+$result = json_decode($responseBody, true);
+if (!empty($result['success'])) {
+    $welcomeText = $result['data']['welcomeText'] ?? null;
+} else {
+    error_log('PlayRight run failed: ' . json_encode($result['errors'] ?? []));
+}
+```
+
+### Laravel (optional convenience)
+
+If you *are* on Laravel, its HTTP client wraps the same cURL call more
+tersely:
 
 ```php
 use Illuminate\Support\Facades\Http;
 
 $response = Http::timeout(30)
-    ->withHeaders([
-        'x-api-key' => config('services.playright.key'),
-    ])
+    ->withHeaders(['x-api-key' => config('services.playright.key')])
     ->post(config('services.playright.url') . '/run', [
         'url' => 'https://example.com/login',
         'actions' => [
@@ -224,30 +310,33 @@ $response = Http::timeout(30)
 if ($response->successful() && $response->json('success')) {
     $welcomeText = $response->json('data.welcomeText');
 } else {
-    // $response->json('errors') has the failure details
     report('PlayRight run failed: ' . json_encode($response->json('errors')));
 }
 ```
 
-Add the service URL/key to `config/services.php`:
+With `config/services.php`:
 
 ```php
 'playright' => [
-    'url' => env('PLAYRIGHT_URL', 'https://playright.onrender.com'),
+    'url' => env('PLAYRIGHT_URL', 'https://playright-jvfn.onrender.com'),
     'key' => env('PLAYRIGHT_API_KEY'),
 ],
 ```
 
-And to `.env` on the Laravel side:
+### Shared config
+
+Whichever you use, set these once wherever your app keeps secrets (`.env`,
+cPanel environment variables, etc.):
 
 ```
-PLAYRIGHT_URL=https://playright.onrender.com
+PLAYRIGHT_URL=https://playright-jvfn.onrender.com
 PLAYRIGHT_API_KEY=<same value as Render's API_KEY env var>
 ```
 
 Because the service is stateless (a fresh, isolated browser context per
-request), you can call it concurrently from multiple Laravel jobs/requests
-without them interfering with each other.
+request), any of the above can be called concurrently from multiple
+requests/jobs without them interfering with each other — see
+[Concurrency](#concurrency) below for the current limit.
 
 ## Concurrency
 
