@@ -23,3 +23,7 @@ services:
         value: "60000"
       - key: RUN_TIMEOUT_MS
         value: "90000"
+      - key: MAX_CONCURRENT_RUNS
+        value: "3"
+      - key: QUEUE_TIMEOUT_MS
+        value: "20000"

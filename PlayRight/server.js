@@ -11,6 +11,8 @@ const MAX_BODY_SIZE = process.env.MAX_BODY_SIZE || '2mb';
 const DEFAULT_ACTION_TIMEOUT_MS = Number(process.env.DEFAULT_ACTION_TIMEOUT_MS) || 15000;
 const MAX_ACTION_TIMEOUT_MS = Number(process.env.MAX_ACTION_TIMEOUT_MS) || 60000;
 const GLOBAL_RUN_TIMEOUT_MS = Number(process.env.RUN_TIMEOUT_MS) || 90000;
+const MAX_CONCURRENT_RUNS = Number(process.env.MAX_CONCURRENT_RUNS) || 3;
+const QUEUE_TIMEOUT_MS = Number(process.env.QUEUE_TIMEOUT_MS) || 20000;
 
 const app = express();
 
@@ -66,6 +68,44 @@ function withTimeout(promise, ms, message) {
     timer = setTimeout(() => reject(new Error(message)), ms);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+// ---------------------------------------------------------------------------
+// Concurrency limiter — requests run fully in parallel (separate
+// BrowserContexts) up to MAX_CONCURRENT_RUNS at once. Beyond that, requests
+// wait briefly in a FIFO queue instead of piling on and OOM-crashing the
+// container, which would take down in-flight requests for everyone.
+// ---------------------------------------------------------------------------
+
+let activeRuns = 0;
+const waitQueue = [];
+
+function acquireSlot() {
+  if (activeRuns < MAX_CONCURRENT_RUNS) {
+    activeRuns++;
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const entry = {
+      grant() {
+        clearTimeout(timer);
+        activeRuns++;
+        resolve();
+      },
+    };
+    const timer = setTimeout(() => {
+      const idx = waitQueue.indexOf(entry);
+      if (idx !== -1) waitQueue.splice(idx, 1);
+      reject(new Error('Server is busy handling other requests; please retry shortly'));
+    }, QUEUE_TIMEOUT_MS);
+    waitQueue.push(entry);
+  });
+}
+
+function releaseSlot() {
+  activeRuns--;
+  const next = waitQueue.shift();
+  if (next) next.grant();
 }
 
 // ---------------------------------------------------------------------------
@@ -224,6 +264,9 @@ app.get('/health', (req, res) => {
     success: true,
     status: 'ok',
     uptimeSeconds: process.uptime(),
+    activeRuns,
+    queued: waitQueue.length,
+    maxConcurrentRuns: MAX_CONCURRENT_RUNS,
     timestamp: new Date().toISOString(),
   });
 });
@@ -247,6 +290,17 @@ app.post('/run', requireApiKey, async (req, res) => {
       steps: [],
       data: {},
       errors: ['"actions" is required and must be a non-empty array'],
+    });
+  }
+
+  try {
+    await acquireSlot();
+  } catch (err) {
+    return res.status(503).set('Retry-After', '5').json({
+      success: false,
+      steps: [],
+      data: {},
+      errors: [err.message],
     });
   }
 
@@ -288,6 +342,7 @@ app.post('/run', requireApiKey, async (req, res) => {
     if (context) {
       await context.close().catch(() => {});
     }
+    releaseSlot();
   }
 
   res.status(200).json({ success, steps, data, errors });

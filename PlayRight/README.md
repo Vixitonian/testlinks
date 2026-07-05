@@ -12,8 +12,19 @@ HTTP request).
 Liveness check.
 
 ```json
-{ "success": true, "status": "ok", "uptimeSeconds": 12.3, "timestamp": "2026-07-05T00:00:00.000Z" }
+{
+  "success": true,
+  "status": "ok",
+  "uptimeSeconds": 12.3,
+  "activeRuns": 1,
+  "queued": 0,
+  "maxConcurrentRuns": 3,
+  "timestamp": "2026-07-05T00:00:00.000Z"
+}
 ```
+
+`activeRuns`/`queued` are useful for checking whether the service is under
+load (see [Concurrency](#concurrency) below).
 
 ### `POST /run`
 
@@ -238,6 +249,31 @@ Because the service is stateless (a fresh, isolated browser context per
 request), you can call it concurrently from multiple Laravel jobs/requests
 without them interfering with each other.
 
+## Concurrency
+
+Multiple callers are served **in parallel, not one-at-a-time**: every
+`/run` request gets its own isolated `BrowserContext` (separate cookies,
+storage, cache) on a single shared Chromium process, and all the Playwright
+calls are async I/O — nothing blocks Node's event loop while a page loads.
+
+That said, each concurrent browser context costs real memory, and Render's
+free plan only has 512MB RAM — enough simultaneous contexts will OOM-crash
+the container for every user, not just the extra ones. So the service caps
+true parallelism at `MAX_CONCURRENT_RUNS` (default `3`): requests within the
+limit run immediately and concurrently; anything beyond that waits in a
+short FIFO queue (up to `QUEUE_TIMEOUT_MS`, default 20s) for a slot to free
+up, rather than being rejected outright or crashing the box. If the queue
+wait is exceeded, the caller gets `503` with a `Retry-After` header instead
+of a hung request.
+
+Check current load anytime via `GET /health` (`activeRuns`, `queued`,
+`maxConcurrentRuns`). If you're consistently seeing requests queue, either:
+
+- upgrade the Render instance type (more RAM/CPU) and raise
+  `MAX_CONCURRENT_RUNS` to match, or
+- run multiple Render instances behind a load balancer for horizontal
+  scaling (safe since the service holds no state between requests).
+
 ## Configuration reference
 
 | Env var | Default | Purpose |
@@ -249,3 +285,5 @@ without them interfering with each other.
 | `DEFAULT_ACTION_TIMEOUT_MS` | `15000` | per-action timeout when not specified in the request |
 | `MAX_ACTION_TIMEOUT_MS` | `60000` | upper bound on a caller-supplied `timeout` |
 | `RUN_TIMEOUT_MS` | `90000` | hard ceiling for an entire `/run` call |
+| `MAX_CONCURRENT_RUNS` | `3` | how many `/run` calls execute in parallel before queueing |
+| `QUEUE_TIMEOUT_MS` | `20000` | how long a queued request waits for a free slot before `503` |
