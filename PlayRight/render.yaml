@@ -1,0 +1,25 @@
+# Render Blueprint for the PlayRight service.
+# If this file lives inside a subfolder of a monorepo, create the Blueprint
+# in the Render dashboard and set "Root Directory" to this folder — or copy
+# this file to the repository root and keep `rootDir: PlayRight` below.
+services:
+  - type: web
+    name: playright
+    runtime: docker
+    plan: free
+    region: oregon
+    rootDir: PlayRight
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: API_KEY
+        sync: false
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: DEFAULT_ACTION_TIMEOUT_MS
+        value: "15000"
+      - key: MAX_ACTION_TIMEOUT_MS
+        value: "60000"
+      - key: RUN_TIMEOUT_MS
+        value: "90000"
