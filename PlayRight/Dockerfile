@@ -1,6 +1,6 @@
 # Official Playwright image: Chromium + all OS-level dependencies preinstalled.
 # Pin the tag to match the "playwright" npm version in package.json exactly.
-FROM mcr.microsoft.com/playwright:v1.47.2-jammy
+FROM mcr.microsoft.com/playwright:v1.55.1-jammy
 
 WORKDIR /app
 ENV NODE_ENV=production
