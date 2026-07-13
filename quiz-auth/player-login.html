@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Player Login — Nigerian History Quiz</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="card">
+    <h1>Player login</h1>
+    <p class="subtitle">Nigerian History Quiz</p>
+    <form id="login-form">
+      <label for="username">Username</label>
+      <input id="username" name="username" autocomplete="username" required>
+
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+      <button type="submit" id="submit-btn">Log in</button>
+      <p class="error" id="error"></p>
+    </form>
+    <p class="links">No account yet? <a href="player-signup.html">Sign up</a></p>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script>
+    const form = document.getElementById("login-form");
+    const errorEl = document.getElementById("error");
+    const submitBtn = document.getElementById("submit-btn");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorEl.classList.remove("visible");
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Logging in...";
+
+      try {
+        await playerLogin(form.username.value.trim(), form.password.value);
+        window.location.href = "player-dashboard.html";
+      } catch (err) {
+        errorEl.textContent = "Invalid username or password.";
+        errorEl.classList.add("visible");
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Log in";
+      }
+    });
+  </script>
+</body>
+</html>

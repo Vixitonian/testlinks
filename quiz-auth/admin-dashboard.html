@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Dashboard — Nigerian History Quiz</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="card">
+    <h1 id="greeting">Admin</h1>
+    <p class="subtitle">Nigerian History Quiz</p>
+
+    <div class="profile-row"><span>Email</span><span id="email"></span></div>
+    <div class="profile-row"><span>Questions in bank</span><span id="question-count">…</span></div>
+    <div class="profile-row"><span>Total quiz attempts</span><span id="attempt-count">…</span></div>
+
+    <button class="logout" id="logout-btn">Log out</button>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script>
+    const session = requireSession("admin", "admin-login.html");
+    if (session) {
+      document.getElementById("greeting").textContent = `Welcome, ${session.user.name || session.user.email}`;
+      document.getElementById("email").textContent = session.user.email;
+
+      supabeinRequest("GET", `/data/${SUPABEIN_PROJECT_ID}/questions?limit=1000`, undefined, session.token)
+        .then((r) => { document.getElementById("question-count").textContent = r.count ?? (r.data || []).length; })
+        .catch(() => { document.getElementById("question-count").textContent = "—"; });
+
+      supabeinRequest("GET", `/data/${SUPABEIN_PROJECT_ID}/quiz_attempts?limit=1000`, undefined, session.token)
+        .then((r) => { document.getElementById("attempt-count").textContent = r.count ?? (r.data || []).length; })
+        .catch(() => { document.getElementById("attempt-count").textContent = "—"; });
+    }
+
+    document.getElementById("logout-btn").addEventListener("click", () => {
+      clearSession("admin");
+      window.location.href = "admin-login.html";
+    });
+  </script>
+</body>
+</html>

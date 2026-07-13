@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Account — Nigerian History Quiz</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="card">
+    <h1 id="greeting">Welcome</h1>
+    <p class="subtitle">Nigerian History Quiz</p>
+
+    <div class="profile-row"><span>Username</span><span id="username"></span></div>
+    <div class="profile-row"><span>Display name</span><span id="display_name"></span></div>
+    <div class="profile-row"><span>Attempts played</span><span id="attempt-count">…</span></div>
+    <div class="profile-row"><span>Best score</span><span id="best-score">…</span></div>
+
+    <button class="logout" id="logout-btn">Log out</button>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script>
+    const session = requireSession("player", "player-login.html");
+    if (session) {
+      document.getElementById("greeting").textContent = `Welcome, ${session.user.display_name || session.user.username}`;
+      document.getElementById("username").textContent = session.user.username;
+      document.getElementById("display_name").textContent = session.user.display_name || "—";
+
+      supabeinRequest(
+        "GET",
+        `/data/${SUPABEIN_PROJECT_ID}/quiz_attempts?player_id=eq.${session.user.id}&limit=1000`,
+        undefined,
+        session.token
+      ).then((result) => {
+        const attempts = result.data || [];
+        document.getElementById("attempt-count").textContent = attempts.length;
+        const best = attempts.reduce((max, a) => Math.max(max, a.total_score || 0), 0);
+        document.getElementById("best-score").textContent = attempts.length ? best : "—";
+      }).catch(() => {
+        document.getElementById("attempt-count").textContent = "—";
+        document.getElementById("best-score").textContent = "—";
+      });
+    }
+
+    document.getElementById("logout-btn").addEventListener("click", () => {
+      clearSession("player");
+      window.location.href = "player-login.html";
+    });
+  </script>
+</body>
+</html>

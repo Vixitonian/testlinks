@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Create Player Account — Nigerian History Quiz</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="card">
+    <h1>Create your account</h1>
+    <p class="subtitle">Play the Nigerian History Quiz</p>
+    <form id="signup-form">
+      <label for="username">Username</label>
+      <input id="username" name="username" autocomplete="username" required minlength="3" maxlength="100">
+
+      <label for="display_name">Display name (optional)</label>
+      <input id="display_name" name="display_name" maxlength="255">
+
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="new-password" required minlength="8">
+
+      <button type="submit" id="submit-btn">Create account</button>
+      <p class="error" id="error"></p>
+    </form>
+    <p class="links">Already have an account? <a href="player-login.html">Log in</a></p>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script>
+    const form = document.getElementById("signup-form");
+    const errorEl = document.getElementById("error");
+    const submitBtn = document.getElementById("submit-btn");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorEl.classList.remove("visible");
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Creating account...";
+
+      const username = form.username.value.trim();
+      const displayName = form.display_name.value.trim();
+      const password = form.password.value;
+
+      try {
+        await playerSignup(username, password, displayName);
+        await playerLogin(username, password);
+        window.location.href = "player-dashboard.html";
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.classList.add("visible");
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Create account";
+      }
+    });
+  </script>
+</body>
+</html>
