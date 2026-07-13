@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#008751" />
+<meta name="description" content="Test your knowledge of Nigerian history with an interactive quiz." />
+<title>Nigeria History Quiz</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --green:#008751; --green-d:#00693f; --green-l:#e6f4ee;
+    --gold:#d4a017; --ink:#12241b; --muted:#5b6b62;
+    --bg:#f4f7f5; --card:#ffffff; --line:#e2e9e5;
+    --ok:#1a8a4f; --ok-bg:#e5f6ec; --bad:#c9382b; --bad-bg:#fbeae8;
+    --shadow:0 10px 30px rgba(0,60,35,.10); --radius:18px;
+    --font:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e1512;--card:#16201b;--line:#25332b;--ink:#e8f0ec;--muted:#9db0a6;
+      --green-l:#12261d;--shadow:0 10px 30px rgba(0,0,0,.35)}
+  }
+  html,body{height:100%}
+  body{font-family:var(--font);background:var(--bg);color:var(--ink);
+    line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100dvh;
+    display:flex;flex-direction:column}
+  .wrap{width:100%;max-width:680px;margin:0 auto;padding:20px 18px 40px;flex:1;
+    display:flex;flex-direction:column}
+  /* Header */
+  header{display:flex;align-items:center;gap:12px;padding:6px 2px 18px}
+  .flag{width:40px;height:40px;border-radius:10px;overflow:hidden;flex:none;
+    display:grid;grid-template-columns:1fr 1fr 1fr;box-shadow:var(--shadow)}
+  .flag i{display:block}.flag i:nth-child(2){background:#fff}
+  .flag i:nth-child(1),.flag i:nth-child(3){background:var(--green)}
+  .brand{font-weight:800;letter-spacing:-.02em;font-size:1.05rem}
+  .brand small{display:block;font-weight:500;color:var(--muted);font-size:.72rem;
+    letter-spacing:.06em;text-transform:uppercase}
+  header .spacer{flex:1}
+  .ghost{background:none;border:1px solid var(--line);color:var(--muted);
+    padding:8px 12px;border-radius:10px;font:inherit;font-size:.8rem;cursor:pointer}
+  .ghost:hover{border-color:var(--green);color:var(--green)}
+  /* Card */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:26px;animation:rise .4s cubic-bezier(.2,.7,.3,1)}
+  @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  h1{font-size:1.9rem;letter-spacing:-.03em;line-height:1.15;margin-bottom:8px}
+  .lead{color:var(--muted);margin-bottom:22px}
+  /* Buttons */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;
+    width:100%;padding:15px 20px;border:none;border-radius:14px;cursor:pointer;
+    font:inherit;font-weight:700;font-size:1.02rem;background:var(--green);color:#fff;
+    transition:transform .12s ease,filter .12s ease;box-shadow:0 6px 16px rgba(0,135,81,.28)}
+  .btn:hover{filter:brightness(1.06)}.btn:active{transform:translateY(1px) scale(.995)}
+  .btn.sec{background:var(--green-l);color:var(--green-d);box-shadow:none;border:1px solid var(--line)}
+  .btn.mini{width:auto;padding:10px 16px;font-size:.9rem}
+  .btn[disabled]{opacity:.55;cursor:not-allowed;filter:none}
+  /* Stats row */
+  .stats{display:flex;gap:12px;margin:22px 0 6px}
+  .stat{flex:1;background:var(--green-l);border-radius:14px;padding:14px;text-align:center}
+  .stat b{display:block;font-size:1.5rem;color:var(--green-d);letter-spacing:-.02em}
+  .stat span{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  /* Progress */
+  .top{display:flex;justify-content:space-between;align-items:center;
+    font-size:.8rem;color:var(--muted);margin-bottom:12px;font-weight:600}
+  .bar{height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin-bottom:24px}
+  .bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--green),var(--gold));
+    border-radius:99px;transition:width .4s cubic-bezier(.2,.7,.3,1)}
+  .qtext{font-size:1.3rem;font-weight:700;letter-spacing:-.02em;margin-bottom:20px}
+  /* Options */
+  .opts{display:flex;flex-direction:column;gap:11px}
+  .opt{display:flex;align-items:center;gap:14px;width:100%;text-align:left;
+    padding:15px 16px;border:1.5px solid var(--line);border-radius:14px;background:var(--card);
+    color:var(--ink);font:inherit;font-size:1rem;cursor:pointer;
+    transition:border-color .15s,background .15s,transform .1s}
+  .opt:hover:not(:disabled){border-color:var(--green);background:var(--green-l)}
+  .opt:active:not(:disabled){transform:scale(.99)}
+  .opt .k{flex:none;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;
+    background:var(--green-l);color:var(--green-d);font-weight:800;font-size:.85rem}
+  .opt.correct{border-color:var(--ok);background:var(--ok-bg)}
+  .opt.correct .k{background:var(--ok);color:#fff}
+  .opt.wrong{border-color:var(--bad);background:var(--bad-bg)}
+  .opt.wrong .k{background:var(--bad);color:#fff}
+  .opt:disabled{cursor:default}
+  .feedback{margin-top:18px;font-weight:600;padding:12px 14px;border-radius:12px;
+    display:none;align-items:center;gap:8px}
+  .feedback.show{display:flex;animation:rise .3s}
+  .feedback.good{background:var(--ok-bg);color:var(--ok)}
+  .feedback.bad{background:var(--bad-bg);color:var(--bad)}
+  .qfoot{margin-top:22px;display:flex;justify-content:flex-end}
+  /* Result ring */
+  .ring{width:170px;height:170px;margin:6px auto 18px;position:relative}
+  .ring svg{transform:rotate(-90deg)}
+  .ring .val{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+  .ring .val b{font-size:2.6rem;letter-spacing:-.04em;line-height:1}
+  .ring .val span{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+  .verdict{text-align:center;font-size:1.25rem;font-weight:800;margin-bottom:4px}
+  .verdict.sub{font-weight:500;font-size:.95rem;color:var(--muted);margin-bottom:22px}
+  /* Review */
+  .review{margin-top:26px;border-top:1px solid var(--line);padding-top:20px}
+  .review h3{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:14px}
+  .ri{padding:13px 0;border-bottom:1px solid var(--line)}
+  .ri:last-child{border-bottom:none}
+  .ri .q{font-weight:600;display:flex;gap:9px;align-items:flex-start}
+  .ri .q .dot{flex:none;margin-top:3px;width:18px;height:18px;border-radius:50%;
+    display:grid;place-items:center;font-size:.7rem;color:#fff}
+  .ri.ok .dot{background:var(--ok)}.ri.no .dot{background:var(--bad)}
+  .ri .ans{margin:6px 0 0 27px;font-size:.9rem;color:var(--muted)}
+  .ri .ans b{color:var(--ink)}
+  .row2{display:flex;gap:12px;margin-top:24px}
+  .row2 .btn{flex:1}
+  /* Admin */
+  label{display:block;font-size:.78rem;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;margin:14px 0 6px}
+  input,textarea,select{width:100%;padding:12px 14px;border:1.5px solid var(--line);
+    border-radius:12px;font:inherit;font-size:.98rem;background:var(--card);color:var(--ink)}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--green)}
+  textarea{resize:vertical;min-height:70px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .qlist{margin-top:8px}
+  .qrow{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+  .qrow .ord{flex:none;width:30px;height:30px;border-radius:8px;background:var(--green-l);
+    color:var(--green-d);display:grid;place-items:center;font-weight:800;font-size:.82rem}
+  .qrow .txt{flex:1;min-width:0;font-size:.92rem}
+  .qrow .txt small{display:block;color:var(--muted);font-size:.76rem}
+  .qrow .acts{display:flex;gap:6px}
+  .iconbtn{border:1px solid var(--line);background:var(--card);border-radius:9px;
+    padding:7px 10px;cursor:pointer;font-size:.8rem;color:var(--muted)}
+  .iconbtn:hover{border-color:var(--green);color:var(--green)}
+  .iconbtn.del:hover{border-color:var(--bad);color:var(--bad)}
+  .tag{display:inline-block;font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:6px;
+    background:var(--green-l);color:var(--green-d);margin-left:6px}
+  .tag.off{background:var(--bad-bg);color:var(--bad)}
+  /* Misc */
+  .center{text-align:center}
+  .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--green);
+    border-radius:50%;animation:sp .8s linear infinite;margin:40px auto}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .err{background:var(--bad-bg);color:var(--bad);padding:12px 14px;border-radius:12px;
+    font-size:.9rem;margin:10px 0}
+  footer{text-align:center;color:var(--muted);font-size:.75rem;padding:22px 0 6px}
+  footer a{color:var(--muted)}
+  .hide{display:none!important}
+  @media(max-width:480px){.card{padding:20px}h1{font-size:1.6rem}.qtext{font-size:1.15rem}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="flag" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="brand">Nigeria History Quiz<small>Test your knowledge</small></div>
+    <div class="spacer"></div>
+    <button class="ghost" id="navAdmin">Admin</button>
+  </header>
+  <main id="app"><div class="spin"></div></main>
+  <footer>Made with SupaBein · <a href="#/">Home</a></footer>
+</div>
+
+<script>
+"use strict";
+/* ---------- Config ---------- */
+const CONFIG = {
+  API_BASE: (location.hostname.includes("localhost") ? "http://" : "https://") +
+            "supabein.dxinnovationhub.com/api/v1",
+  PROJECT_ID: 55,
+  ADMIN_PASS: "naija1960"          // light-touch gate; platform policies are the real control
+};
+
+/* ---------- Tiny data-API client ---------- */
+const api = {
+  base(){ return `${CONFIG.API_BASE}/data/${CONFIG.PROJECT_ID}`; },
+  async req(path, opts={}){
+    const res = await fetch(this.base()+path, {
+      headers:{ "Content-Type":"application/json" }, ...opts
+    });
+    let body=null; try{ body=await res.json(); }catch(_){}
+    if(!res.ok){ throw new Error((body&&body.error)||`Request failed (${res.status})`); }
+    return body;
+  },
+  list(table, qs=""){ return this.req(`/${table}${qs?`?${qs}`:""}`).then(r=>r.data||r||[]); },
+  insert(table, row){ return this.req(`/${table}`, {method:"POST", body:JSON.stringify(row)}); },
+  update(table, id, patch){ return this.req(`/${table}/${id}`, {method:"PATCH", body:JSON.stringify(patch)}); },
+  remove(table, id){ return this.req(`/${table}/${id}`, {method:"DELETE"}); }
+};
+
+/* ---------- Helpers ---------- */
+const $  = (s,r=document)=>r.querySelector(s);
+const el = (h)=>{ const t=document.createElement("template"); t.innerHTML=h.trim(); return t.content.firstElementChild; };
+const esc = (s)=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const app = $("#app");
+const LETTERS=["a","b","c","d"];
+const bestKey="nhq_best";
+const getBest=()=>{ const v=+localStorage.getItem(bestKey); return Number.isFinite(v)?v:0; };
+const setBest=(v)=>{ if(v>getBest()) localStorage.setItem(bestKey,v); };
+const loading=()=>{ app.innerHTML='<div class="spin"></div>'; };
+const errorView=(msg)=>{ app.innerHTML=`<div class="card"><div class="err">⚠ ${esc(msg)}</div>
+  <button class="btn sec" onclick="location.reload()">Retry</button></div>`; };
+
+async function loadQuestions(){
+  const rows = await api.list("questions","order=display_order.asc&limit=200");
+  // stable secondary sort by id so duplicate display_orders stay deterministic
+  return rows.sort((a,b)=> (a.display_order-b.display_order) || (a.id-b.id));
+}
+
+/* ---------- Router ---------- */
+const routes={};
+function route(name, fn){ routes[name]=fn; }
+function go(hash){ if(location.hash===hash) render(); else location.hash=hash; }
+async function render(){
+  const h=location.hash.replace(/^#\/?/,"")||"";
+  const [name]=h.split("/");
+  const fn=routes[name]||routes[""];
+  try{ await fn(); }catch(e){ errorView(e.message||"Something went wrong"); }
+}
+window.addEventListener("hashchange", render);
+$("#navAdmin").addEventListener("click", ()=>go("#/admin"));
+
+/* ---------- Home ---------- */
+route("", async ()=>{
+  loading();
+  const qs = await loadQuestions();
+  const best=getBest();
+  app.innerHTML="";
+  app.appendChild(el(`
+    <div class="card">
+      <h1>How well do you know Nigeria's history?</h1>
+      <p class="lead">Answer ${qs.length} multiple-choice question${qs.length===1?"":"s"} covering
+        independence, leaders and landmark events. See your score and review every answer at the end.</p>
+      <div class="stats">
+        <div class="stat"><b>${qs.length}</b><span>Questions</span></div>
+        <div class="stat"><b>${best}</b><span>Your best</span></div>
+        <div class="stat"><b>${qs.length?Math.round(100*best/qs.length):0}%</b><span>Best rate</span></div>
+      </div>
+      <div style="margin-top:22px"><button class="btn" id="start">▶  Start Quiz</button></div>
+    </div>`));
+  $("#start").onclick=()=>{ if(!qs.length){alert("No questions yet — add some in Admin.");return;} go("#/quiz"); };
+});
+
+/* ---------- Quiz ---------- */
+const State={ qs:[], i:0, score:0, answers:[], attemptId:null, locked:false };
+
+route("quiz", async ()=>{
+  loading();
+  State.qs=await loadQuestions();
+  if(!State.qs.length){ go("#/"); return; }
+  State.i=0; State.score=0; State.answers=[]; State.locked=false; State.attemptId=null;
+  // create an attempt row (best-effort; quiz still works if it fails)
+  try{
+    const a=await api.insert("quiz_attempts",
+      {total_score:0,current_question_order:1,selected_answers:[],is_complete:0});
+    State.attemptId=a.id;
+  }catch(_){}
+  paintQuestion();
+});
+
+function paintQuestion(){
+  const q=State.qs[State.i], n=State.qs.length;
+  State.locked=false;
+  app.innerHTML="";
+  const card=el(`
+    <div class="card">
+      <div class="top"><span>Question ${State.i+1} of ${n}</span><span>Score ${State.score}</span></div>
+      <div class="bar"><i style="width:${(State.i/n)*100}%"></i></div>
+      <div class="qtext">${esc(q.question_text)}</div>
+      <div class="opts"></div>
+      <div class="feedback" id="fb"></div>
+      <div class="qfoot"><button class="btn mini hide" id="next">Next  →</button></div>
+    </div>`);
+  const opts=$(".opts",card);
+  LETTERS.forEach(L=>{
+    const val=q["option_"+L];
+    if(val==null||val==="") return;
+    const b=el(`<button class="opt" data-k="${L}">
+        <span class="k">${L.toUpperCase()}</span><span>${esc(val)}</span></button>`);
+    b.onclick=()=>choose(L,card);
+    opts.appendChild(b);
+  });
+  app.appendChild(card);
+}
+
+function choose(letter, card){
+  if(State.locked) return;
+  State.locked=true;
+  const q=State.qs[State.i];
+  const correct=(q.correct_option||"").trim().toLowerCase();
+  const isRight = letter===correct;
+  if(isRight) State.score++;
+  State.answers.push({question_id:q.id, selected:letter, correct:isRight});
+
+  card.querySelectorAll(".opt").forEach(b=>{
+    b.disabled=true;
+    const k=b.dataset.k;
+    if(k===correct) b.classList.add("correct");
+    else if(k===letter) b.classList.add("wrong");
+  });
+  const fb=$("#fb",card);
+  fb.className="feedback show "+(isRight?"good":"bad");
+  fb.textContent=isRight ? "✓ Correct!"
+    : `✕ Not quite — the answer is ${correct.toUpperCase()}.`;
+  $(".top span:last-child",card).textContent="Score "+State.score;
+
+  // persist progress (best-effort)
+  if(State.attemptId){
+    api.update("quiz_attempts",State.attemptId,{
+      total_score:State.score,
+      current_question_order:State.i+1,
+      selected_answers:State.answers
+    }).catch(()=>{});
+  }
+  const next=$("#next",card);
+  next.classList.remove("hide");
+  next.textContent = State.i+1<State.qs.length ? "Next  →" : "See results  →";
+  next.focus();
+  next.onclick=()=>{
+    if(State.i+1<State.qs.length){ State.i++; paintQuestion(); }
+    else finishQuiz();
+  };
+}
+
+async function finishQuiz(){
+  setBest(State.score);
+  if(State.attemptId){
+    try{ await api.update("quiz_attempts",State.attemptId,{is_complete:1,total_score:State.score}); }catch(_){}
+  }
+  go("#/result");
+}
+
+/* ---------- Result ---------- */
+route("result", async ()=>{
+  const n=State.qs.length;
+  if(!n){ go("#/"); return; }
+  const score=State.score, pct=Math.round(100*score/n);
+  const C=2*Math.PI*76, off=C*(1-pct/100);
+  let title,sub;
+  if(pct===100){title="Flawless! 🏆";sub="A perfect score — you know your history.";}
+  else if(pct>=80){title="Excellent! 🎉";sub="Impressive knowledge of Nigeria's history.";}
+  else if(pct>=60){title="Well done 👏";sub="A solid result — a little revision and you'll ace it.";}
+  else if(pct>=40){title="Good effort 💪";sub="You're getting there. Try again to boost your score.";}
+  else {title="Keep learning 📚";sub="Every attempt teaches you something new.";}
+
+  app.innerHTML="";
+  const card=el(`
+    <div class="card center">
+      <div class="ring">
+        <svg width="170" height="170">
+          <circle cx="85" cy="85" r="76" fill="none" stroke="var(--line)" stroke-width="13"/>
+          <circle cx="85" cy="85" r="76" fill="none" stroke="var(--green)" stroke-width="13"
+            stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C}"
+            style="transition:stroke-dashoffset 1s cubic-bezier(.2,.7,.3,1)" id="prog"/>
+        </svg>
+        <div class="val"><b>${score}/${n}</b><span>${pct}%</span></div>
+      </div>
+      <div class="verdict">${title}</div>
+      <div class="verdict sub">${sub}</div>
+      <div class="row2">
+        <button class="btn" id="again">↻  Play again</button>
+        <button class="btn sec" id="home">Home</button>
+      </div>
+      <div class="review"><h3>Review your answers</h3><div id="rev"></div></div>
+    </div>`);
+  app.appendChild(card);
+  requestAnimationFrame(()=>{ $("#prog",card).style.strokeDashoffset=off; });
+  const rev=$("#rev",card);
+  State.qs.forEach(q=>{
+    const a=State.answers.find(x=>x.question_id===q.id);
+    const correct=(q.correct_option||"").trim().toLowerCase();
+    const ok=a&&a.correct;
+    const chosen = a ? `${a.selected.toUpperCase()}. ${esc(q["option_"+a.selected]||"")}` : "—";
+    const right  = `${correct.toUpperCase()}. ${esc(q["option_"+correct]||"")}`;
+    rev.appendChild(el(`
+      <div class="ri ${ok?"ok":"no"}">
+        <div class="q"><span class="dot">${ok?"✓":"✕"}</span><span>${esc(q.question_text)}</span></div>
+        <div class="ans">Your answer: <b>${chosen}</b>${ok?"":` &nbsp;·&nbsp; Correct: <b>${right}</b>`}</div>
+      </div>`));
+  });
+  $("#again",card).onclick=()=>go("#/quiz");
+  $("#home",card).onclick=()=>go("#/");
+});
+
+/* ---------- Admin ---------- */
+const NIGERIA_HINT=/niger|biafra|lagos|abuja|lugard|balewa|azikiwe|gowon|awolowo|amalgamat|independ|colon|republic|1960|1914|1963|196[0-9]|naira|yoruba|igbo|hausa/i;
+
+route("admin", async ()=>{
+  if(sessionStorage.getItem("nhq_admin")!=="1"){ return adminGate(); }
+  loading();
+  const qs=await loadQuestions();
+  app.innerHTML="";
+  const card=el(`
+    <div class="card">
+      <div class="top"><span>Admin · ${qs.length} questions</span>
+        <span><a href="#/" style="color:var(--muted)">← Back to quiz</a></span></div>
+      <div style="display:flex;gap:10px;margin:6px 0 14px">
+        <button class="btn mini" id="addBtn">＋ Add question</button>
+        <button class="btn mini sec" id="renum">↕ Renumber order</button>
+      </div>
+      <div id="msg"></div>
+      <div class="qlist" id="qlist"></div>
+    </div>`);
+  app.appendChild(card);
+  const list=$("#qlist",card);
+  qs.forEach(q=>{
+    const off = !NIGERIA_HINT.test(q.question_text);
+    const row=el(`
+      <div class="qrow">
+        <div class="ord">${q.display_order}</div>
+        <div class="txt">${esc(q.question_text)}
+          <small>Correct: ${esc((q.correct_option||"").toUpperCase())}${off?'<span class="tag off">off-topic?</span>':'<span class="tag">Nigeria</span>'}</small>
+        </div>
+        <div class="acts">
+          <button class="iconbtn" data-edit="${q.id}">Edit</button>
+          <button class="iconbtn del" data-del="${q.id}">Delete</button>
+        </div>
+      </div>`);
+    list.appendChild(row);
+  });
+  $("#addBtn",card).onclick=()=>adminForm(null);
+  list.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>adminForm(qs.find(q=>q.id==b.dataset.edit)));
+  list.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Delete this question permanently?")) return;
+    try{ await api.remove("questions",b.dataset.del); render(); }
+    catch(e){ $("#msg",card).innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+  });
+  $("#renum",card).onclick=async()=>{
+    if(!confirm("Renumber all questions to sequential order (1..N)?")) return;
+    try{
+      for(let k=0;k<qs.length;k++){
+        if(qs[k].display_order!==k+1) await api.update("questions",qs[k].id,{display_order:k+1});
+      }
+      render();
+    }catch(e){ $("#msg",card).innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+  };
+});
+
+function adminGate(){
+  app.innerHTML="";
+  const card=el(`
+    <div class="card">
+      <h1 style="font-size:1.4rem">Admin access</h1>
+      <p class="lead">Enter the admin passphrase to manage quiz questions.</p>
+      <label>Passphrase</label>
+      <input type="password" id="pass" placeholder="••••••••" autofocus />
+      <div id="ge"></div>
+      <div style="margin-top:18px"><button class="btn" id="enter">Unlock</button></div>
+      <div style="margin-top:10px"><a href="#/" style="color:var(--muted);font-size:.85rem">← Back</a></div>
+    </div>`);
+  app.appendChild(card);
+  const submit=()=>{
+    if($("#pass",card).value===CONFIG.ADMIN_PASS){ sessionStorage.setItem("nhq_admin","1"); render(); }
+    else $("#ge",card).innerHTML=`<div class="err">Incorrect passphrase.</div>`;
+  };
+  $("#enter",card).onclick=submit;
+  $("#pass",card).addEventListener("keydown",e=>{ if(e.key==="Enter") submit(); });
+}
+
+function adminForm(q){
+  const editing=!!q;
+  app.innerHTML="";
+  const card=el(`
+    <div class="card">
+      <div class="top"><span>${editing?"Edit":"New"} question</span>
+        <span><a href="#/admin" style="color:var(--muted)">← Cancel</a></span></div>
+      <label>Question</label>
+      <textarea id="qt" placeholder="Type the question…">${editing?esc(q.question_text):""}</textarea>
+      <div class="grid2">
+        <div><label>Option A</label><input id="oa" value="${editing?esc(q.option_a):""}"></div>
+        <div><label>Option B</label><input id="ob" value="${editing?esc(q.option_b):""}"></div>
+        <div><label>Option C</label><input id="oc" value="${editing?esc(q.option_c):""}"></div>
+        <div><label>Option D</label><input id="od" value="${editing?esc(q.option_d):""}"></div>
+      </div>
+      <div class="grid2">
+        <div><label>Correct option</label>
+          <select id="co">
+            ${["A","B","C","D"].map(L=>`<option value="${L}" ${editing&&(q.correct_option||"").toUpperCase()===L?"selected":""}>${L}</option>`).join("")}
+          </select></div>
+        <div><label>Display order</label>
+          <input id="ord" type="number" min="1" value="${editing?q.display_order:""}"></div>
+      </div>
+      <div id="fe"></div>
+      <div style="margin-top:20px"><button class="btn" id="save">${editing?"Save changes":"Create question"}</button></div>
+    </div>`);
+  app.appendChild(card);
+  $("#save",card).onclick=async()=>{
+    const row={
+      question_text:$("#qt",card).value.trim(),
+      option_a:$("#oa",card).value.trim(), option_b:$("#ob",card).value.trim(),
+      option_c:$("#oc",card).value.trim(), option_d:$("#od",card).value.trim(),
+      correct_option:$("#co",card).value,
+      display_order:parseInt($("#ord",card).value,10)||0
+    };
+    if(!row.question_text||!row.option_a||!row.option_b||!row.option_c||!row.option_d){
+      $("#fe",card).innerHTML=`<div class="err">Please fill in the question and all four options.</div>`; return;
+    }
+    $("#save",card).disabled=true;
+    try{
+      if(editing) await api.update("questions",q.id,row);
+      else await api.insert("questions",row);
+      go("#/admin");
+    }catch(e){ $("#fe",card).innerHTML=`<div class="err">${esc(e.message)}</div>`; $("#save",card).disabled=false; }
+  };
+}
+
+/* ---------- boot ---------- */
+render();
+</script>
+</body>
+</html>
