@@ -4,14 +4,14 @@ const path = require("path");
 const crypto = require("crypto");
 
 const DEFAULTS = {
-  // Base URL of the cloud server's API, no trailing slash — e.g.
-  // "https://your-api.example.com". The agent POSTs /register once, then
-  // polls /heartbeat on an interval. See README's "Cloud server contract"
-  // for the exact request/response shapes the server must implement.
-  serverBaseUrl: "https://your-api.example.com",
-  // Must match whatever the server checks the X-Api-Key header against
-  // for device-facing endpoints.
-  apiKey: "change-me-device-key",
+  // Base URL of the cloud server's API, no trailing slash. Hardcoded to
+  // this project's live deployment (../cloud-api on Render) so a fresh
+  // install works immediately with no manual config editing — matching
+  // the same choice made for the phone app. Point this elsewhere by
+  // editing config.json if you deploy your own cloud-api instance.
+  serverBaseUrl: "https://device-control-cloud-api.onrender.com",
+  // Must match the live deployment's DEVICE_API_KEY.
+  apiKey: "3d3dfa275d869feae65519a868b5d5646309ea51d5fbcceb55c4e7a99f65fbd2",
   // How often to poll the server, in milliseconds. Lower = commands
   // arrive faster; higher = fewer requests against the server.
   pollIntervalMs: 10000,
@@ -20,9 +20,9 @@ const DEFAULTS = {
   // README's "Blocking allow-lists the control server" section). Static
   // rather than resolved via DNS at block-time — simpler and more
   // predictable, at the cost of needing a manual update if the server's
-  // IP ever changes. Generate these with:
+  // IP ever changes. Regenerate with:
   //   node scripts/resolve-server-ips.js <serverBaseUrl>
-  serverAllowIps: [],
+  serverAllowIps: ["216.24.57.7", "216.24.57.15"],
   serverAllowPort: 443,
   // Passphrase required to quit the agent or open the local dashboard's
   // unblock action from an untrusted user's perspective. Change this on
