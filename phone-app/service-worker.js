@@ -4,7 +4,7 @@
 // SupaBein's Data API always go to the network — device status must
 // never be served stale from a cache.
 
-const CACHE_NAME = "device-control-shell-v2";
+const CACHE_NAME = "device-control-shell-v3";
 const SHELL_FILES = [
   "./",
   "./index.html",
