@@ -25,9 +25,9 @@ const DEFAULTS = {
   serverAllowIps: ["216.24.57.7", "216.24.57.15"],
   serverAllowPort: 443,
   // Passphrase required to quit the agent or open the local dashboard's
-  // unblock action from an untrusted user's perspective. Change this on
-  // first run — it is NOT a substitute for the server-side control plane.
-  quitPassphraseHash: hash("changeme"),
+  // unblock action from an untrusted user's perspective. This is NOT a
+  // substitute for the server-side control plane.
+  quitPassphraseHash: hash("ifyobiekwe2026"),
   // Safety net: if a BLOCK is applied, it also cuts the agent's own
   // connection to the server (see README), so a remote ALLOW can't arrive
   // until a firewall allow-list punch-through exists server-side.

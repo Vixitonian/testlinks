@@ -334,10 +334,10 @@ the OS's standard per-app data directory (e.g. `~/.config/laptop-agent` on
 Linux, `~/Library/Application Support/Laptop Agent` on macOS,
 `%APPDATA%\Laptop Agent` on Windows).
 
-Default quit passphrase is **`changeme`** — change it before relying on
-this for anything real (`config.set("quitPassphraseHash", ...)` via
-`Config.setPassphrase()`, or hand-edit the hash in `config.json` using
-`sha256("your phrase")`).
+Quit passphrase defaults to the value hardcoded in `src/config.js`
+(currently set for this deployment) — change it via
+`config.set("quitPassphraseHash", ...)` through `Config.setPassphrase()`,
+or hand-edit the hash in `config.json` using `sha256("your phrase")`.
 
 ### Platform notes
 
