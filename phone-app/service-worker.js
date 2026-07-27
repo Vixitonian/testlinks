@@ -10,10 +10,11 @@ const SHELL_FILES = [
   "./index.html",
   "./styles.css",
   "./app.js",
-  "./manifest.json",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png"
+  "./manifest.json"
 ];
+// Icons are embedded as base64 data URIs in index.html/manifest.json
+// rather than served as separate files (see scripts/embed-icons.js) — so
+// there's nothing extra to precache for them.
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
