@@ -1,23 +1,24 @@
 "use strict";
 
-const STORAGE_KEY = "deviceControlSettings"; // {baseUrl, apiKey} — local to this browser only
+// Hardcoded rather than entered via a setup screen — this app is served
+// as public static files, so these values are effectively public the
+// moment they're deployed (anyone can view-source them). ADMIN_KEY is a
+// key minted specifically for that assumption (not the same value ever
+// used in a "type this in by hand and keep it private" flow) and only
+// grants listing devices + sending Block/Allow on this one deployment —
+// see ../cloud-api/README.md for the full threat-model note.
+const API_BASE = "https://device-control-cloud-api.onrender.com";
+const ADMIN_KEY = "189cafb0dd0ed74dd5709fe915ed7049e9395dccb018a30eac8ce7c0c7033427";
+
 const POLL_MS = 5000;
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-function getSettings() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || null; }
-  catch (_) { return null; }
-}
-function saveSettings(s) { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
-
 async function apiFetch(path, opts = {}) {
-  const settings = getSettings();
-  if (!settings) throw new Error("Not configured");
-  const res = await fetch(settings.baseUrl.replace(/\/+$/, "") + path, {
+  const res = await fetch(API_BASE.replace(/\/+$/, "") + path, {
     ...opts,
-    headers: { "Content-Type": "application/json", "X-Api-Key": settings.apiKey, ...(opts.headers || {}) }
+    headers: { "Content-Type": "application/json", "X-Api-Key": ADMIN_KEY, ...(opts.headers || {}) }
   });
   let body = null;
   try { body = await res.json(); } catch (_) { /* non-JSON error page */ }
@@ -38,7 +39,6 @@ function relativeTime(mysqlUtc) {
 
 let currentDevices = [];
 const busyDevices = new Set();
-let pollTimer = null;
 
 function cardHtml(d, i) {
   const blocked = d.internet_blocked;
@@ -126,48 +126,10 @@ function showError(msg) {
 }
 function hideError() { $("errorBanner").classList.add("hide"); }
 
-function startPolling() {
-  stopPolling();
-  refresh();
-  pollTimer = setInterval(refresh, POLL_MS);
-}
-function stopPolling() {
-  if (pollTimer) clearInterval(pollTimer);
-  pollTimer = null;
-}
-
-function showSetup() {
-  $("setupScreen").classList.remove("hide");
-  $("mainScreen").classList.add("hide");
-  stopPolling();
-}
-function showMain() {
-  $("setupScreen").classList.add("hide");
-  $("mainScreen").classList.remove("hide");
-  startPolling();
-}
-
-$("setupForm").addEventListener("submit", (e) => {
-  e.preventDefault();
-  const baseUrl = $("baseUrlInput").value.trim();
-  const apiKey = $("apiKeyInput").value.trim();
-  if (!baseUrl || !apiKey) return;
-  saveSettings({ baseUrl, apiKey });
-  hideError();
-  showMain();
-});
-
-$("settingsBtn").addEventListener("click", () => {
-  const s = getSettings();
-  if (s) {
-    $("baseUrlInput").value = s.baseUrl;
-    $("apiKeyInput").value = s.apiKey;
-  }
-  showSetup();
-});
-
-// boot
-if (getSettings()) showMain(); else showSetup();
+// boot straight into the device list — empty state handles "nothing
+// registered yet" on its own, no setup step needed.
+refresh();
+setInterval(refresh, POLL_MS);
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("service-worker.js").catch(() => {});

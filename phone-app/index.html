@@ -20,35 +20,12 @@
         <p class="muted small">Family devices</p>
       </div>
     </div>
-    <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">⚙</button>
   </header>
 
   <main>
     <div class="banner error hide" id="errorBanner"></div>
 
-    <!-- Setup screen: shown until baseUrl + apiKey are saved locally -->
-    <section id="setupScreen" class="hide">
-      <div class="card">
-        <h2>Connect to your server</h2>
-        <p class="muted small">
-          Enter your cloud API's address and admin key. These are stored
-          only on this device (browser local storage) — never shipped in
-          the app itself.
-        </p>
-        <form id="setupForm">
-          <label for="baseUrlInput">API base URL</label>
-          <input id="baseUrlInput" type="url" placeholder="https://your-api.example.com" required />
-
-          <label for="apiKeyInput">Admin API key</label>
-          <input id="apiKeyInput" type="password" placeholder="Admin key" required />
-
-          <button type="submit" class="btn primary" style="margin-top:16px">Connect</button>
-        </form>
-      </div>
-    </section>
-
-    <!-- Main screen: device list -->
-    <section id="mainScreen" class="hide">
+    <section id="mainScreen">
       <div id="deviceList" class="device-list"></div>
       <div id="emptyState" class="empty-state hide">
         <p>No devices yet.</p>

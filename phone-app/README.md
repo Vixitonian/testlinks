@@ -7,10 +7,12 @@ build step, just static files. Works on any phone's browser and can be
 
 ## What it does
 
-- **First run**: asks for your Cloud API's base URL and admin key, stored
-  only in this browser's `localStorage` — **never baked into the shipped
-  files**, so the static app itself carries no secret at all. Revisit any
-  time via the ⚙ button.
+- **No setup step**: the API base URL and admin key are hardcoded in
+  `app.js` for this specific deployment — open the page and the device
+  list is already live. See "Security note on the admin key" below for
+  what that tradeoff actually means.
+- **Empty state**: if nothing's registered yet, shows "No devices yet"
+  instead of an error or a blank screen.
 - **Device list**: hostname, platform, username, an online/offline dot
   (derived from the server's last-heartbeat threshold), and a status pill.
 - **Block / Allow**: one button per device that flips to whichever action
@@ -55,32 +57,51 @@ Any static file server works — there's no build step:
 python3 -m http.server 8080          # or: npx serve, nginx, GitHub Pages, Netlify, etc.
 ```
 Then open it on a phone (must be HTTPS or localhost for the service
-worker to register — most static hosts give you HTTPS for free) and
-enter your Cloud API's URL + admin key when prompted.
+worker to register — most static hosts give you HTTPS for free). It'll
+talk to whatever `API_BASE`/`ADMIN_KEY` are hardcoded at the top of
+`app.js` — edit those and redeploy if you want a different deployment to
+point at a different API.
 
 ## Security note on the admin key
 
-It lives in this browser's `localStorage`, entered once by whoever sets
-the phone up — not embedded in any file that gets deployed/served. That's
-a meaningfully smaller blast radius than the SupaBein token the API server
-holds (this key can only list devices and send Block/Allow — not read or
-write arbitrary data), but it's still a real secret sitting in browser
-storage: don't set this up on a shared/public device, and treat "someone
-with access to this phone can see the key via devtools" as the actual
-threat model rather than assuming it's uncrackable.
+`API_BASE` and `ADMIN_KEY` are hardcoded constants at the top of
+`app.js` — there's no setup screen, so there's nowhere else for them to
+live. Since this app is served as public static files, **that key is
+effectively public the moment it's deployed**: anyone who knows this
+page's URL can view-source `app.js`, extract it, and call `cloud-api`'s
+`/devices` and `/command` directly — same access the app itself has (list
+every device, send Block/Allow to any of them), bypassing the UI
+entirely. It grants nothing beyond that (no read/write to arbitrary
+SupaBein data — that's a separate, server-side-only credential), but
+within that scope, treat this page's URL itself as the real secret, not
+the key baked inside it. The key deployed here was minted specifically
+for this public/hardcoded use — it was never the one meant to be kept
+private and typed in by hand.
+
+If that trade-off stops being acceptable (e.g. this URL becomes widely
+known, or more than one household shares the deployment), the fix is a
+real per-user login on top of `cloud-api`, not a client-side secret —
+not built, see "Not built yet" below.
 
 ## What's verified
 
 **Pre-deployment**, driven in a real browser (Playwright) against
 `cloud-api` running locally but backed by the real live SupaBein project —
-not fixtures, not a mock. The full loop: setup screen → device list
-renders a real seeded device → clicking Block Internet → the UI correctly
-shows the "Blocking…" pending state → a simulated laptop-agent poll (the
-same request shape the real agent sends) applies it and acks it → the
-UI's next auto-refresh shows "Blocked" → and the same round-trip for
-Allow. Settings re-open was also verified to prefill with the previously
-saved values. This is what caught the `pending_command` gap in the first
-place.
+not fixtures, not a mock. The full loop, both before and after removing
+the setup screen: loading with zero devices registered shows the empty
+state immediately (no setup step, no flash of the wrong screen) → seeding
+a real device via the real API → the device list picks it up on the next
+auto-refresh with no page reload → clicking Block Internet → the UI
+correctly shows the "Blocking…" pending state → a simulated laptop-agent
+poll (the same request shape the real agent sends) applies it and acks
+it → the UI's next auto-refresh shows "Blocked" → and the same round-trip
+for Allow. This is what caught the `pending_command` gap in the first
+place, and later confirmed the no-setup-screen version behaves the same
+way (necessarily tested against a local `cloud-api` standing in for the
+hardcoded production URL, for the same reason described in the known-gap
+note below — there's no settings screen left to point a test at a
+different backend, so a temporary, uncommitted copy of `app.js` with the
+constants swapped was used for this local verification).
 
 **Post-deployment**, every live file (`index.html`, `manifest.json`,
 `service-worker.js`, `app.js`, `styles.css`) was fetched from the real
