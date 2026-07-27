@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#1a8a4f" />
+<meta name="description" content="See connected laptops and control their internet access." />
+<title>Family Device Control</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <div>
+        <h1>Device Control</h1>
+        <p class="muted small">Family devices</p>
+      </div>
+    </div>
+    <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">⚙</button>
+  </header>
+
+  <main>
+    <div class="banner error hide" id="errorBanner"></div>
+
+    <!-- Setup screen: shown until baseUrl + apiKey are saved locally -->
+    <section id="setupScreen" class="hide">
+      <div class="card">
+        <h2>Connect to your server</h2>
+        <p class="muted small">
+          Enter your cloud API's address and admin key. These are stored
+          only on this device (browser local storage) — never shipped in
+          the app itself.
+        </p>
+        <form id="setupForm">
+          <label for="baseUrlInput">API base URL</label>
+          <input id="baseUrlInput" type="url" placeholder="https://your-api.example.com" required />
+
+          <label for="apiKeyInput">Admin API key</label>
+          <input id="apiKeyInput" type="password" placeholder="Admin key" required />
+
+          <button type="submit" class="btn primary" style="margin-top:16px">Connect</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Main screen: device list -->
+    <section id="mainScreen" class="hide">
+      <div id="deviceList" class="device-list"></div>
+      <div id="emptyState" class="empty-state hide">
+        <p>No devices yet.</p>
+        <p class="muted small">Install the laptop agent and it will appear here once it registers.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="muted small">Updates automatically every few seconds.</footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

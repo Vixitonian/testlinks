@@ -1,0 +1,13 @@
+{
+  "name": "cloud-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backend for the phone-app <-> laptop-agent system. Implements the contract in ../laptop-agent/README.md, backed by a SupaBein project as the datastore. Zero dependencies — uses Node's built-in fetch.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

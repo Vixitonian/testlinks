@@ -9,11 +9,12 @@ project brief:
 Phone App  →  Cloud Server  →  Laptop Agent   (this folder)
 ```
 
-The cloud server is **external and not part of this repo** — point this
-agent at whatever API you build (any language/platform that can speak
-plain HTTP + JSON). See "Cloud server contract" below for exactly what it
-needs to implement; the agent doesn't care how it's built as long as it
-implements that contract.
+The cloud server now exists — see `../cloud-api` (Node.js, backed by a
+SupaBein project as the datastore, tested against that live project end
+to end). The phone app also exists — see `../phone-app`. See "Cloud
+server contract" below for the exact API `connection.js` calls; the agent
+doesn't care how the server is implemented as long as it matches that
+contract, but `../cloud-api` is the real one it's actually meant to talk to.
 
 **Intended use:** on a device you own or are authorized to manage, with the
 person using it aware it's installed. The agent's name, tray icon, and
@@ -86,16 +87,21 @@ Request:  {device_uuid, command_id, ok, error?}
 Response: {ok: true}
 ```
 
-**`GET /devices`** *(for your phone app, not called by the agent)*
+**`GET /devices`** *(for the phone app, not called by the agent)*
 ```
 Response: {ok: true, devices: [{device_uuid, hostname, platform, username,
-                                 internet_blocked, online, last_seen}, ...]}
+                                 internet_blocked, online, last_seen,
+                                 pending_command, last_command_failed}, ...]}
 ```
 "online" should mean "last_seen within a few multiples of the agent's
 poll interval" — computed server-side/DB-side against its own clock, not
-by mixing timezones between two systems.
+by mixing timezones between two systems. `pending_command` (`"BLOCK"` /
+`"ALLOW"` / `null`) and `last_command_failed` (`{command, error}` / `null`)
+let the phone app show an in-flight/failed state instead of silently
+looking like nothing happened while a command is still working its way to
+the device.
 
-**`POST /command`** *(for your phone app, not called by the agent)* —
+**`POST /command`** *(for the phone app, not called by the agent)* —
 validate `command` against a whitelist (`BLOCK`/`ALLOW` only) and 404 on
 an unknown `device_uuid` before inserting.
 ```
@@ -103,10 +109,9 @@ Request:  {device_uuid, command}
 Response: {ok: true, id}
 ```
 
-A reference implementation of exactly this contract (PHP + MySQL, tested
-against a real database) existed earlier in this project's history if you
-want to see a worked example — check the git log for "cloud server" —
-but isn't kept in the repo since the server is now yours to build.
+`../cloud-api` implements exactly this contract (Node.js, backed by
+SupaBein) — see its README for the schema, deployment, and how it was
+tested against the real live project.
 
 ## Known limitation: blocking is all-or-nothing (for now)
 
@@ -156,10 +161,10 @@ npm install       # pulls electron, electron-builder, sudo-prompt
 npm start         # launches the tray app
 ```
 
-Point it at your API: edit `config.json` (created on first run in the
-OS's per-app data directory) and set `serverBaseUrl` to your API's base
-URL and `apiKey` to match whatever your server checks the agent's
-`X-Api-Key` header against.
+Point it at `../cloud-api` (or any server implementing the contract
+above): edit `config.json` (created on first run in the OS's per-app data
+directory) and set `serverBaseUrl` to its base URL and `apiKey` to match
+its `DEVICE_API_KEY`.
 
 First launch creates `config.json`, `device.json`, and a `logs/` folder in
 the OS's standard per-app data directory (e.g. `~/.config/laptop-agent` on
@@ -195,14 +200,9 @@ correctly, the dashboard UI renders and reflects state changes correctly
 
 The `connection.js` polling logic (register → heartbeat → apply command →
 ack, retry-on-failure, one-command-per-tick) was proven correct end-to-end
-against a real reference server implementing the contract above, backed
-by a real database — not a stub. That reference server has since been
-removed from the repo (see "Cloud server contract" above), so **whatever
-you build to replace it hasn't itself been tested yet** — only the
-contract and the agent's side of it have. Re-verify once your server
-exists, especially: the `heartbeat` "at most one command, marked
-delivered immediately" behavior, and that `register` is a true upsert
-(the agent calls it every startup).
+against `../cloud-api` running for real, backed by the real live SupaBein
+project — not a stub, not a disposable copy. See `../cloud-api/README.md`
+for the full test account.
 
 **Not exercised for real**: the actual `netsh` / `networksetup` / `nmcli`
 commands were never run for real during development — doing so inside a
@@ -214,15 +214,14 @@ something behaves unexpectedly.
 
 ## Next steps (not built yet)
 
-1. **Your cloud server**, implementing the contract above.
-2. **Allow-listing fix** for the all-or-nothing block limitation: instead
+1. **Allow-listing fix** for the all-or-nothing block limitation: instead
    of a blanket block, permit outbound traffic to the server's IP/port so
    a blocked laptop can still poll and receive `ALLOW`, removing the
    dependency on the auto-revert timer.
-3. **Phone app**: device list, last-activity display, Block/Allow buttons
-   — talks to your server's `GET /devices` and `POST /command`, never
-   directly to the agent.
-4. Later: per-domain rules/categories, scheduling, and real activity
+2. Deploy `../cloud-api` somewhere it can stay running (see its README),
+   and `../phone-app` to any static host, then point this agent's
+   `config.json` at the deployed API.
+3. Later: per-domain rules/categories, scheduling, and real activity
    monitoring (the current build has no traffic inspection — that needs a
    local proxy or OS-level DNS/connection logging, deliberately deferred
    per the project's own MVP phasing).
