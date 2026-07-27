@@ -250,6 +250,10 @@ function initSettingsScreen() {
 initLoginGate();
 initSettingsScreen();
 
+// service-worker.js no longer caches anything — it's a self-unregistering
+// kill switch for phones that already installed the old caching version.
+// Still registered unconditionally so the browser checks for it, notices
+// it changed, and activates the version that cleans itself up.
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("service-worker.js").catch(() => {});
 }

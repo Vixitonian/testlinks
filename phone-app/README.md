@@ -39,9 +39,32 @@ SupaBein" below.
   shared passcode everywhere (see "Shared passcode" below).
 - **Auto-refreshes** every 5 seconds. No push notifications (would need a
   push service wired in — not built).
-- **Installable**: manifest + service worker cache the static shell so the
-  app loads even when offline (device data obviously still needs a live
-  connection).
+- **Installable**: `manifest.json` still lets you "Add to Home Screen" for
+  an app-like icon and standalone window. **Nothing is cached** — see
+  "No caching, on purpose" below.
+
+## No caching, on purpose
+
+There's no offline shell anymore. Every load fetches `index.html`,
+`app.js`, `styles.css`, `supabein.js`, and `manifest.json` straight from
+the network, every time — this app has no meaningful offline mode anyway
+(its entire purpose is live device state; a cached device list is just
+wrong, not useful), so the only thing a cache-first service worker was
+actually buying was risk. That risk was real: an `app.js` change got
+pushed to git but not redeployed, and the old cache-first service worker
+kept serving the stale version even after the live site was fixed — a
+phone that had already loaded the app once just never saw the fix.
+
+`service-worker.js` still exists, but only as a **kill switch**: on any
+phone that already installed the old caching version, the browser
+notices the file changed, activates the new one, which deletes every
+cache it left behind, unregisters itself, and reloads any open window —
+self-healing, no user action needed beyond having the app open at some
+point after this shipped. `app.js` still calls
+`navigator.serviceWorker.register()` unconditionally; that's what
+triggers the browser to check for and pick up the kill switch. A phone
+with nothing registered yet just installs it, watches it immediately
+unregister itself, and moves on — harmless.
 
 ## Live deployment
 

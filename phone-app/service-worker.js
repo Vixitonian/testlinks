@@ -1,44 +1,27 @@
 "use strict";
-// Caches only the static app shell so the PWA still loads (with cached
-// data, if any was ever fetched successfully) when offline. Calls to
-// SupaBein's Data API always go to the network — device status must
-// never be served stale from a cache.
-
-const CACHE_NAME = "device-control-shell-v3";
-const SHELL_FILES = [
-  "./",
-  "./index.html",
-  "./styles.css",
-  "./supabein.js",
-  "./app.js",
-  "./manifest.json"
-];
-// Icons are embedded as base64 data URIs in index.html/manifest.json
-// rather than served as separate files (see scripts/embed-icons.js) — so
-// there's nothing extra to precache for them.
-
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_FILES)).then(() => self.skipWaiting())
-  );
-});
+// This app deliberately does NOT cache anything anymore. A cache-first
+// service worker plus a code change that got pushed to git but not
+// actually redeployed once meant a phone kept showing old app.js even
+// after the live site was fixed — not worth the offline-shell benefit
+// for an app whose whole point is showing live device state anyway.
+//
+// This file's only job now is to clean up after the old caching version
+// on any phone that already installed it: delete every cache it left
+// behind, unregister itself, and reload any open window so it recovers
+// immediately without the user having to manually close/reopen the app.
+// app.js still calls navigator.serviceWorker.register() on load — for a
+// phone with nothing registered yet that's a harmless no-op (installs
+// this, which immediately unregisters itself); for a phone with the old
+// caching version already active, that's what triggers the browser to
+// fetch this file fresh and notice it changed.
+self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url);
-  // Only ever serve same-origin static shell files from cache; anything
-  // else (in particular, calls to the configured cloud API's own origin)
-  // passes straight through to the network untouched.
-  if (url.origin !== self.location.origin) return;
-
-  event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+      .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+      .then(() => self.registration.unregister())
+      .then(() => self.clients.matchAll())
+      .then((clients) => clients.forEach((client) => client.navigate(client.url)))
   );
 });
