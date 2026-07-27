@@ -15,6 +15,15 @@ const DEFAULTS = {
   // How often to poll the server, in milliseconds. Lower = commands
   // arrive faster; higher = fewer requests against the server.
   pollIntervalMs: 10000,
+  // Hardcoded IP(s) + port to allow-list when BLOCK is applied, so the
+  // agent's own connection to the server survives being "blocked" (see
+  // README's "Blocking allow-lists the control server" section). Static
+  // rather than resolved via DNS at block-time — simpler and more
+  // predictable, at the cost of needing a manual update if the server's
+  // IP ever changes. Generate these with:
+  //   node scripts/resolve-server-ips.js <serverBaseUrl>
+  serverAllowIps: [],
+  serverAllowPort: 443,
   // Passphrase required to quit the agent or open the local dashboard's
   // unblock action from an untrusted user's perspective. Change this on
   // first run — it is NOT a substitute for the server-side control plane.

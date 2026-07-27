@@ -1,6 +1,5 @@
 "use strict";
 const network = require("./network");
-const { resolveAllowTarget } = require("./network/target");
 
 /**
  * Single choke point for actually changing the network state. Both the
@@ -33,7 +32,7 @@ class Controller {
 
     try {
       if (normalized === "BLOCK") {
-        const target = await this._resolveAllowTarget();
+        const target = this._getAllowTarget();
         await network.block(target);
         this.state.patch({ internetBlocked: true, lastError: null });
         this._armAutoRevert();
@@ -53,21 +52,25 @@ class Controller {
   }
 
   /**
-   * Resolves the control server's current IP(s) so BLOCK can allow-list
-   * it specifically instead of cutting the agent's own connection along
-   * with everything else. If resolution fails (bad serverBaseUrl, DNS
-   * hiccup, no server configured yet), falls back to a blanket block with
-   * no allow-list — BLOCK still succeeds rather than erroring out, just
-   * without the "still reachable remotely" property, relying solely on
-   * the auto-revert timer in that fallback case.
+   * Reads the hardcoded allow-list from config.json (see
+   * scripts/resolve-server-ips.js) so BLOCK can permit that destination
+   * specifically instead of cutting the agent's own connection along with
+   * everything else. If it hasn't been configured yet (empty
+   * serverAllowIps), falls back to a blanket block with no allow-list —
+   * BLOCK still succeeds rather than erroring out, just without the
+   * "still reachable remotely" property, relying solely on the
+   * auto-revert timer in that fallback case.
    */
-  async _resolveAllowTarget() {
-    try {
-      return await resolveAllowTarget(this.config.get("serverBaseUrl"));
-    } catch (e) {
-      this.logger.warn(`Could not resolve server address for allow-listing, falling back to a blanket block: ${e.message}`);
+  _getAllowTarget() {
+    const ips = this.config.get("serverAllowIps");
+    if (!Array.isArray(ips) || ips.length === 0) {
+      this.logger.warn(
+        "serverAllowIps is empty, falling back to a blanket block. " +
+        "Run: node scripts/resolve-server-ips.js <serverBaseUrl> and add the result to config.json."
+      );
       return null;
     }
+    return { ips, port: Number(this.config.get("serverAllowPort")) || 443 };
   }
 
   /**

@@ -115,11 +115,12 @@ tested against the real live project.
 
 ## Blocking allow-lists the control server, so remote ALLOW keeps working
 
-`BLOCK` doesn't just cut everything — `controller.js` first resolves the
-control server's current IP(s) (`network/target.js`, fresh DNS lookup
-every time, since cloud hosts can rotate IPs) and passes that to the
-platform module, which blocks all other traffic by default but carves out
-an explicit exception for that IP/port plus outbound DNS:
+`BLOCK` doesn't just cut everything — `controller.js` reads a **hardcoded**
+allow-list from `config.json` (`serverAllowIps` + `serverAllowPort`, set
+up once via `scripts/resolve-server-ips.js` — see "Running it" below) and
+passes it to the platform module, which blocks all other traffic by
+default but carves out an explicit exception for that IP/port plus
+outbound DNS:
 
 - **Windows**: flips the Windows Firewall's *default policy* to
   block inbound/outbound, then adds explicit ALLOW rules for the
@@ -142,18 +143,25 @@ so a remote `ALLOW` from the phone app can actually arrive and get
 applied — closing the gap this project started with (see the git history
 for how that gap was diagnosed before this fix existed).
 
+**Why hardcoded instead of resolved live via DNS at block-time** (an
+earlier version of this fix did that): it's simpler and more predictable
+— no DNS-failure fallback path to reason about, no dependency on Node's
+`dns` module behaving identically across three OSes at the exact moment
+`BLOCK` fires. The tradeoff is the flip side of that predictability: if
+the server's IP ever changes, `config.json` needs a manual update
+(`node scripts/resolve-server-ips.js <serverBaseUrl>`, paste the result
+in) — nothing detects that automatically.
+
 **Residual limitations, by design choice or known gap:**
-- If DNS resolution fails when `BLOCK` is applied (bad `serverBaseUrl`,
-  transient DNS issue, nothing configured yet), it falls back to a
-  blanket block with no allow-list — logged clearly, and `BLOCK` still
-  succeeds rather than erroring out. In that fallback case, this
-  paragraph's guarantee doesn't hold and you're back to relying on the
-  auto-revert timer below.
-- The allow-list is resolved once, at the moment `BLOCK` is applied — not
-  re-checked periodically for the duration of a block. If the server's IP
-  changes *while already blocked* (uncommon, but possible on some hosts),
-  the agent won't notice until the next `BLOCK`/`ALLOW` cycle. Periodic
-  re-resolution while blocked would close this but isn't built.
+- If `serverAllowIps` is empty (not configured yet), `BLOCK` falls back to
+  a blanket block with no allow-list — logged clearly, and `BLOCK` still
+  succeeds rather than erroring out. In that fallback case, this section's
+  guarantee doesn't hold and you're back to relying on the auto-revert
+  timer below.
+- If the server's IP changes and `config.json` isn't updated to match,
+  the agent will silently keep allow-listing the *old*, no-longer-correct
+  IP — same practical effect as the fallback above, just without a log
+  warning, since nothing knows the hardcoded value has gone stale.
 - DNS itself (port 53, any destination) stays open throughout a block, as
   the practical way to keep hostname resolution working without needing
   to rewrite the agent's HTTP client to connect by raw IP + manual
@@ -182,16 +190,17 @@ src/
   tray.js                   Tray icon + menu
   network/
     index.js                 Picks the right backend for process.platform
-    target.js                 Resolves the control server's IP(s) to allow-list
-    windows.js                  Default-deny firewall policy + allow rules for target.js's result
-    macos.js                     pf ruleset: deny-all + pass rules for the target, elevated via sudo-prompt
-    linux.js                      iptables OUTPUT/INPUT chains with RETURN exceptions for the target
+    target.js                 DNS-resolves a URL to {ips, port} — used by scripts/resolve-server-ips.js, not at block-time
+    windows.js                  Default-deny firewall policy + allow rules for the configured serverAllowIps
+    macos.js                     pf ruleset: deny-all + pass rules for the configured target, elevated via sudo-prompt
+    linux.js                      iptables OUTPUT/INPUT chains with RETURN exceptions for the configured target
   ui/
     dashboard.html/js/css       Status window (opened from the tray)
     prompt.html/js/css           Passphrase prompt for Quit
   preload.js                    contextBridge API exposed to renderers
 scripts/
   generate-icons.js               Generates the tray/app PNG icons (no external assets)
+  resolve-server-ips.js            One-time setup: prints the serverAllowIps/serverAllowPort to paste into config.json
 ```
 
 ## Running it
@@ -204,7 +213,14 @@ npm start         # launches the tray app
 Point it at `../cloud-api` (or any server implementing the contract
 above): edit `config.json` (created on first run in the OS's per-app data
 directory) and set `serverBaseUrl` to its base URL and `apiKey` to match
-its `DEVICE_API_KEY`.
+its `DEVICE_API_KEY`. Then run:
+```bash
+node scripts/resolve-server-ips.js https://your-api.example.com
+```
+and paste the printed `serverAllowIps`/`serverAllowPort` into the same
+`config.json`, so `BLOCK` can allow-list the server (see "Blocking
+allow-lists the control server" above). Re-run this if the server ever
+moves to a different host/IP.
 
 First launch creates `config.json`, `device.json`, and a `logs/` folder in
 the OS's standard per-app data directory (e.g. `~/.config/laptop-agent` on
@@ -244,15 +260,16 @@ against `../cloud-api` running for real, backed by the real live SupaBein
 project — not a stub, not a disposable copy. See `../cloud-api/README.md`
 for the full test account.
 
-`network/target.js`'s DNS resolution was run for real against the actual
+`network/target.js`'s DNS resolution (used by `scripts/resolve-server-ips.js`,
+not at block-time — see above) was run for real against the actual
 production hosts (`cloud-api` on Render, and separately SupaBein's own
 domain), correctly returning multiple IPs where a host has more than one
 A record and defaulting the port correctly for https/http/custom ports.
 `controller.js`'s wiring was verified end-to-end with `network` mocked: a
-real resolvable `serverBaseUrl` produces the expected `{ips, port}` passed
-into `network.block()`, and an intentionally unresolvable one correctly
-falls back to `null` (blanket block) with a logged warning while `BLOCK`
-still reports success rather than erroring out.
+configured `serverAllowIps` produces the expected `{ips, port}` passed
+into `network.block()`, and an empty/missing one correctly falls back to
+`null` (blanket block) with a logged warning while `BLOCK` still reports
+success rather than erroring out.
 
 Every exact command sequence each platform module generates — the
 Windows firewall-policy-flip + allow rules, the macOS `pf` ruleset content
