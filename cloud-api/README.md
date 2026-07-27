@@ -130,7 +130,8 @@ depends on data that existed during testing.
 
 ## Not built yet
 
-The allow-listing fix mentioned in `../laptop-agent/README.md`'s "Known
-limitation" (so a fully-blocked laptop can still receive a remote
-`ALLOW`), and real activity/website monitoring (deliberately out of scope
-per the project's MVP phasing).
+Periodic re-resolution of the agent's allow-list while a block is active
+(see `../laptop-agent/README.md`'s residual limitations — the allow-list
+fix itself, so a blocked laptop can still receive a remote `ALLOW`, is
+now built), and real activity/website monitoring (deliberately out of
+scope per the project's MVP phasing).

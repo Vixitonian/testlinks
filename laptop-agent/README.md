@@ -113,20 +113,59 @@ Response: {ok: true, id}
 SupaBein) — see its README for the schema, deployment, and how it was
 tested against the real live project.
 
-## Known limitation: blocking is all-or-nothing (for now)
+## Blocking allow-lists the control server, so remote ALLOW keeps working
 
-`BLOCK` currently disables the OS network layer entirely (Windows Firewall
-rules / macOS `networksetup` / Linux `nmcli networking off`). That also
-severs the agent's own connection to the server — so today, a laptop
-blocked by a remote command **cannot receive a remote `ALLOW`** until your
-server implements an allow-listing scheme (permit outbound traffic to the
-server's own IP/port so a "blocked" laptop can still poll).
+`BLOCK` doesn't just cut everything — `controller.js` first resolves the
+control server's current IP(s) (`network/target.js`, fresh DNS lookup
+every time, since cloud hosts can rotate IPs) and passes that to the
+platform module, which blocks all other traffic by default but carves out
+an explicit exception for that IP/port plus outbound DNS:
 
-As a safety net so a laptop is never stranded: every `BLOCK` arms an
-**auto-revert timer** (`autoRevertMinutes` in `config.json`, default 60)
-that automatically calls `ALLOW` when it elapses, regardless of server
-connectivity. You can also always unblock locally via the tray menu or
-dashboard, which don't depend on the network being up.
+- **Windows**: flips the Windows Firewall's *default policy* to
+  block inbound/outbound, then adds explicit ALLOW rules for the
+  server + DNS. (Not "add a block rule ahead of an allow rule" — Windows
+  Firewall evaluates an explicit block as taking precedence over an
+  explicit allow for the same traffic regardless of order, so that
+  wouldn't reliably work. Flipping the default policy sidesteps that
+  precedence question entirely.)
+- **macOS**: loads a complete `pf` (packet filter) ruleset — deny
+  everything, `pass` rules for the server + DNS, `skip` on loopback —
+  replacing the earlier approach of disabling network services outright,
+  which had no way to let anything through selectively at all.
+- **Linux**: two dedicated `iptables` chains hooked into
+  OUTPUT/INPUT, with `RETURN` exceptions for loopback, the server, and
+  DNS before the final `DROP` — replacing `nmcli networking off`, which
+  was the same all-or-nothing problem as macOS's old approach.
+
+This means the agent's heartbeat loop keeps working even while "blocked,"
+so a remote `ALLOW` from the phone app can actually arrive and get
+applied — closing the gap this project started with (see the git history
+for how that gap was diagnosed before this fix existed).
+
+**Residual limitations, by design choice or known gap:**
+- If DNS resolution fails when `BLOCK` is applied (bad `serverBaseUrl`,
+  transient DNS issue, nothing configured yet), it falls back to a
+  blanket block with no allow-list — logged clearly, and `BLOCK` still
+  succeeds rather than erroring out. In that fallback case, this
+  paragraph's guarantee doesn't hold and you're back to relying on the
+  auto-revert timer below.
+- The allow-list is resolved once, at the moment `BLOCK` is applied — not
+  re-checked periodically for the duration of a block. If the server's IP
+  changes *while already blocked* (uncommon, but possible on some hosts),
+  the agent won't notice until the next `BLOCK`/`ALLOW` cycle. Periodic
+  re-resolution while blocked would close this but isn't built.
+- DNS itself (port 53, any destination) stays open throughout a block, as
+  the practical way to keep hostname resolution working without needing
+  to rewrite the agent's HTTP client to connect by raw IP + manual
+  SNI/Host-header override. This is a narrow, well-understood exception
+  (the same one virtually every "allow-list" firewall configuration
+  makes) — not a meaningful hole for general browsing.
+
+As a safety net regardless of all of the above: every `BLOCK` still arms
+an **auto-revert timer** (`autoRevertMinutes` in `config.json`, default
+60) that automatically calls `ALLOW` when it elapses. You can also always
+unblock locally via the tray menu or dashboard, which don't depend on the
+network being up at all.
 
 ## Project layout
 
@@ -143,9 +182,10 @@ src/
   tray.js                   Tray icon + menu
   network/
     index.js                 Picks the right backend for process.platform
-    windows.js                netsh advfirewall rules
-    macos.js                   networksetup, elevated via sudo-prompt
-    linux.js                    nmcli, elevated via sudo-prompt
+    target.js                 Resolves the control server's IP(s) to allow-list
+    windows.js                  Default-deny firewall policy + allow rules for target.js's result
+    macos.js                     pf ruleset: deny-all + pass rules for the target, elevated via sudo-prompt
+    linux.js                      iptables OUTPUT/INPUT chains with RETURN exceptions for the target
   ui/
     dashboard.html/js/css       Status window (opened from the tray)
     prompt.html/js/css           Passphrase prompt for Quit
@@ -204,20 +244,41 @@ against `../cloud-api` running for real, backed by the real live SupaBein
 project — not a stub, not a disposable copy. See `../cloud-api/README.md`
 for the full test account.
 
-**Not exercised for real**: the actual `netsh` / `networksetup` / `nmcli`
+`network/target.js`'s DNS resolution was run for real against the actual
+production hosts (`cloud-api` on Render, and separately SupaBein's own
+domain), correctly returning multiple IPs where a host has more than one
+A record and defaulting the port correctly for https/http/custom ports.
+`controller.js`'s wiring was verified end-to-end with `network` mocked: a
+real resolvable `serverBaseUrl` produces the expected `{ips, port}` passed
+into `network.block()`, and an intentionally unresolvable one correctly
+falls back to `null` (blanket block) with a logged warning while `BLOCK`
+still reports success rather than erroring out.
+
+Every exact command sequence each platform module generates — the
+Windows firewall-policy-flip + allow rules, the macOS `pf` ruleset content
+(including the with-target and null-fallback variants), and the Linux
+`iptables` chain setup — was verified with `child_process.exec` and
+`sudo-prompt` both mocked, confirming precisely what would be sent to the
+real OS tools: correct IPs/ports in the allow rules, DNS carved out on
+both TCP/UDP 53, loopback exempted, no `action=block`-type rule used on
+Windows (the precedence problem this whole design avoids), and the
+null-target fallback correctly omitting the server-specific allow rules
+while still defaulting to deny.
+
+**Not exercised for real**: the actual `netsh` / `pfctl` / `iptables`
 commands were never run for real during development — doing so inside a
-shared sandbox would have risked cutting that environment's own network.
-The command-building logic was verified with the network module mocked
-out. **Test the real block/allow behavior on an actual machine before
-relying on it**, ideally with a way to regain physical access in case
-something behaves unexpectedly.
+shared sandbox would have risked cutting that environment's own network
+(especially `iptables`, which this exact sandbox's own connectivity could
+plausibly depend on). **Test the real block/allow behavior — especially
+that a remote `ALLOW` genuinely arrives while "blocked" — on an actual
+machine of each target OS before relying on it**, ideally with a way to
+regain physical access in case something behaves unexpectedly.
 
 ## Next steps (not built yet)
 
-1. **Allow-listing fix** for the all-or-nothing block limitation: instead
-   of a blanket block, permit outbound traffic to the server's IP/port so
-   a blocked laptop can still poll and receive `ALLOW`, removing the
-   dependency on the auto-revert timer.
+1. Periodic re-resolution of the allow-list while a block is active, to
+   handle the control server's IP rotating mid-block (see the residual
+   limitations above).
 2. Deploy `../cloud-api` somewhere it can stay running (see its README),
    and `../phone-app` to any static host, then point this agent's
    `config.json` at the deployed API.

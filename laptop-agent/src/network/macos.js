@@ -1,5 +1,13 @@
 "use strict";
 const { exec } = require("child_process");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+
+// A distinctive first line in every ruleset we load, so isBlocked() can
+// tell "our block is active" apart from macOS's own default pf rules.
+const MARKER = "# laptop-agent-block-marker";
+const RULES_FILE = path.join(os.tmpdir(), "laptop-agent-pf.conf");
 
 function run(cmd) {
   return new Promise((resolve, reject) => {
@@ -10,9 +18,6 @@ function run(cmd) {
   });
 }
 
-/** sudo-prompt shows a native macOS password dialog; it's an optional
- *  dependency so the rest of the agent still loads if it's missing
- *  (you'll just get a clear error instead of a silent no-op). */
 function sudoExec(cmd) {
   return new Promise((resolve, reject) => {
     let sudo;
@@ -28,40 +33,62 @@ function sudoExec(cmd) {
   });
 }
 
-async function listNetworkServices() {
-  const out = await run("networksetup -listallnetworkservices");
-  return out
-    .split("\n")
-    .slice(1) // first line is a header/disclaimer
-    .map((s) => s.trim())
-    .filter((s) => s && !s.startsWith("*")); // "*Name" = already-disabled service
-}
-
 /**
- * Disables every active network service (Wi-Fi, Ethernet, ...). Same
- * all-or-nothing tradeoff as Windows — see README for the auto-revert
- * safety timer this relies on.
+ * Loads a complete pf (packet filter) ruleset that denies everything by
+ * default except loopback and — when allowTarget is known — the control
+ * server's resolved IP(s)/port and outbound DNS. This replaced an earlier
+ * version that just disabled every network service via `networksetup`:
+ * that's a blunt on/off switch with the interface itself going down, so
+ * there was no way to let any traffic through selectively. pf rules run
+ * underneath the interface staying up, so specific destinations can stay
+ * reachable while everything else is blocked.
+ *
+ * Uses a full top-level `pfctl -f <file>` load rather than a named anchor
+ * — macOS's default /etc/pf.conf only auto-evaluates anchors under the
+ * "com.apple/*" namespace, so a custom anchor name wouldn't actually run
+ * without also editing /etc/pf.conf. Loading a complete replacement
+ * ruleset avoids needing to touch that file at all.
+ *
+ * @param {{ips: string[], port: number}|null} allowTarget see windows.js
+ *   for the fallback semantics when this is null.
  */
-async function block() {
-  const services = await listNetworkServices();
-  for (const svc of services) {
-    await sudoExec(`networksetup -setnetworkserviceenabled "${svc}" off`);
+async function block(allowTarget) {
+  const lines = [MARKER, "set skip on lo0", "block drop all"];
+  if (allowTarget) {
+    for (const ip of allowTarget.ips) {
+      lines.push(`pass out quick proto tcp to ${ip} port ${allowTarget.port}`);
+    }
+    lines.push("pass out quick proto { tcp udp } to any port 53");
   }
+  fs.writeFileSync(RULES_FILE, lines.join("\n") + "\n", "utf8");
+
+  await sudoExec(`pfctl -f ${RULES_FILE}`);
+  await sudoExec("pfctl -e").catch(() => {}); // errors if already enabled — fine, ignore
 }
 
 async function allow() {
-  // We don't persist which services were on before blocking (a laptop's
-  // set of services rarely changes), so re-enable everything discoverable.
-  const out = await run("networksetup -listallnetworkservices");
-  const all = out.split("\n").slice(1).map((s) => s.replace(/^\*/, "").trim()).filter(Boolean);
-  for (const svc of all) {
-    await sudoExec(`networksetup -setnetworkserviceenabled "${svc}" on`);
+  // Restore macOS's own default ruleset rather than just disabling pf,
+  // since disabling it would also drop Apple's own default rules (some
+  // of which matter for normal networking, e.g. its NAT/anchor setup).
+  await sudoExec("pfctl -f /etc/pf.conf").catch(() => {});
+  try {
+    fs.unlinkSync(RULES_FILE);
+  } catch (_) {
+    /* already absent */
   }
 }
 
 async function isBlocked() {
-  const services = await listNetworkServices();
-  return services.length === 0; // none enabled => everything is off
+  try {
+    // pf comments (like MARKER) aren't compiled into the kernel's active
+    // ruleset, so `pfctl -sr` (which reads that, not our source file)
+    // never shows them — check for the distinctive rule text instead.
+    // Best-effort, same as the other platforms' isBlocked().
+    const out = await run("pfctl -sr");
+    return out.includes("block drop all");
+  } catch (_) {
+    return false;
+  }
 }
 
 module.exports = { block, allow, isBlocked };
