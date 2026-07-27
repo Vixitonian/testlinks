@@ -19,6 +19,7 @@
   "build": {
     "appId": "com.example.laptopagent",
     "productName": "Laptop Agent",
+    "publish": null,
     "files": [
       "src/**/*",
       "assets/**/*",
