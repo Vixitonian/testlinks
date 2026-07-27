@@ -4,21 +4,21 @@ const https = require("https");
 const { URL } = require("url");
 
 /**
- * Talks to the PHP cloud-server (see ../cloud-server) by polling on an
- * interval rather than holding a socket open — this is what works on
- * ordinary shared/cPanel hosting, which generally can't run a persistent
- * daemon or accept raw WebSocket connections. Every tick:
+ * Talks to whatever cloud server is configured (any HTTP API reachable
+ * via fetch/plain HTTP — a serverless function, a small Express app,
+ * anything) by polling on an interval rather than holding a socket open.
+ * Every tick:
  *   1. register (once, lazily, retried until it succeeds)
  *   2. heartbeat — reports current status, receives at most one pending
  *      command in the same response
  *   3. if a command came back: apply it via Controller, then ack it
  *
- * Endpoint contract (see cloud-server/*.php):
- *   POST {base}/register.php   {device_uuid, hostname, platform, ...}   -> {ok}
- *   POST {base}/heartbeat.php  {device_uuid, internet_blocked}          -> {ok, command: {id, command} | null}
- *   POST {base}/ack.php        {device_uuid, command_id, ok, error?}    -> {ok}
- * All requests carry an X-Api-Key header matching the server's
- * DEVICE_API_KEY.
+ * Endpoint contract the server must implement — see README's "Cloud
+ * server contract" section for full request/response shapes:
+ *   POST {base}/register   {device_uuid, hostname, platform, ...}   -> {ok}
+ *   POST {base}/heartbeat  {device_uuid, internet_blocked}          -> {ok, command: {id, command} | null}
+ *   POST {base}/ack        {device_uuid, command_id, ok, error?}    -> {ok}
+ * All requests carry an X-Api-Key header matching the server's device key.
  */
 class Connection {
   constructor({ baseUrl, apiKey, device, state, controller, logger, pollIntervalMs }) {
@@ -50,7 +50,7 @@ class Connection {
 
     try {
       if (!this._registered) {
-        await this._post("/register.php", {
+        await this._post("/register", {
           device_uuid: this.device.id,
           hostname: this.device.hostname,
           platform: this.device.platform,
@@ -60,7 +60,7 @@ class Connection {
         this._registered = true;
       }
 
-      const res = await this._post("/heartbeat.php", {
+      const res = await this._post("/heartbeat", {
         device_uuid: this.device.id,
         internet_blocked: this.state.internetBlocked
       });
@@ -69,7 +69,7 @@ class Connection {
       if (res.command) {
         this.logger.info(`Server has a command waiting: ${res.command.command} (id ${res.command.id})`);
         const result = await this.controller.applyCommand(res.command.command, "server");
-        await this._post("/ack.php", {
+        await this._post("/ack", {
           device_uuid: this.device.id,
           command_id: res.command.id,
           ok: result.ok,

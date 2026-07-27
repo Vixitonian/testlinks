@@ -1,18 +1,19 @@
 # Laptop Agent
 
-A visible, background Electron app that identifies a laptop, keeps a live
-connection to a (future) cloud server, and applies `BLOCK` / `ALLOW`
-internet commands. This is component 1 of the three-part system described
-in the project brief:
+A visible, background Electron app that identifies a laptop, keeps a
+connection to a cloud server, and applies `BLOCK` / `ALLOW` internet
+commands. This is component 1 of the three-part system described in the
+project brief:
 
 ```
 Phone App  →  Cloud Server  →  Laptop Agent   (this folder)
 ```
 
-The cloud server now exists — see `../cloud-server` (plain PHP + MySQL,
-built for ordinary cPanel hosting). The phone app is **not built yet** —
-this agent is fully usable on its own via its tray menu / dashboard window
-in the meantime.
+The cloud server is **external and not part of this repo** — point this
+agent at whatever API you build (any language/platform that can speak
+plain HTTP + JSON). See "Cloud server contract" below for exactly what it
+needs to implement; the agent doesn't care how it's built as long as it
+implements that contract.
 
 **Intended use:** on a device you own or are authorized to manage, with the
 person using it aware it's installed. The agent's name, tray icon, and
@@ -33,10 +34,10 @@ machine.
 - **Starts at login**: registers itself via Electron's login-item API on
   Windows/macOS, and via an XDG `~/.config/autostart/*.desktop` file on
   Linux (Electron's API doesn't cover most Linux desktops).
-- **Connects to a server**: polls a plain PHP/MySQL backend over
-  HTTPS on an interval (default 10s) rather than holding a socket open —
-  this is what actually works on shared/cPanel hosting, which generally
-  can't run a persistent daemon. See `../cloud-server`.
+- **Connects to a server**: polls your API over HTTPS on an interval
+  (default 10s) rather than holding a socket open — no persistent
+  connection required server-side, so this works on literally any HTTP
+  host: a serverless function, a small Express/Fastify app, whatever.
 - **Receives and applies commands**: `BLOCK` / `ALLOW`, from the server,
   the tray menu, or the local dashboard — all three paths go through the
   same `Controller`, so behavior and logging are identical regardless of
@@ -44,41 +45,83 @@ machine.
 - **Quit is passphrase-gated**: prevents casually disabling the agent from
   the tray. This is a light deterrent, not a security boundary — anyone
   with admin/root on the machine can always stop it via the OS. The real
-  control point is meant to be the server + phone app, once built.
+  control point is meant to be the server + phone app.
 
-## Wire protocol
+## Cloud server contract
 
-HTTP polling against `../cloud-server`'s endpoints (all POST, JSON, with
-an `X-Api-Key` header matching the server's `DEVICE_API_KEY`):
+This is the exact API `src/connection.js` calls. Implement these 3
+endpoints (in whatever you're building) and the agent works against it
+unchanged. Two more (`GET /devices`, `POST /command`) aren't called by the
+agent at all — they're for your phone app / admin UI to drive the same
+data.
 
+All bodies are JSON. Every request carries `X-Api-Key`; use **two
+different keys** — one for the agent, one for admin/phone-app calls — so
+a leaked agent config can't be used to command other devices.
+
+**`POST /register`** — agent calls this once at startup. Upsert keyed on
+`device_uuid`; safe to call repeatedly.
 ```
-agent -> server   POST /register.php   {device_uuid, hostname, platform, osRelease, username}  -> {ok}
-agent -> server   POST /heartbeat.php  {device_uuid, internet_blocked}   -> {ok, command: {id, command}|null}
-agent -> server   POST /ack.php        {device_uuid, command_id, ok, error?}  -> {ok}
+Request:  {device_uuid, hostname, platform, osRelease, username}
+Response: {ok: true}
 ```
 
-`register.php` runs once at startup; `heartbeat.php` runs every
-`pollIntervalMs` and doubles as "how am I doing" + "what should I do" in
-one round trip, since shared hosting bills you (in load, if not money)
-per request.
+**`POST /heartbeat`** — agent calls this every `pollIntervalMs`. Update
+the device's `last_seen`/`internet_blocked`, and in the *same response*
+hand back at most one pending command — combining "status report" and
+"what should I do" into one round trip. Mark the command `delivered`
+(not yet `acked`) as soon as you hand it out, so a second heartbeat before
+the ack arrives doesn't redeliver it.
+```
+Request:  {device_uuid, internet_blocked}
+Response: {ok: true, command: {id, command} | null}   // command: "BLOCK" | "ALLOW"
+```
+404 if `device_uuid` hasn't been registered yet.
+
+**`POST /ack`** — agent calls this right after attempting a delivered
+command. Scope the update to `device_uuid` too, so one device can never
+ack another's command id.
+```
+Request:  {device_uuid, command_id, ok, error?}
+Response: {ok: true}
+```
+
+**`GET /devices`** *(for your phone app, not called by the agent)*
+```
+Response: {ok: true, devices: [{device_uuid, hostname, platform, username,
+                                 internet_blocked, online, last_seen}, ...]}
+```
+"online" should mean "last_seen within a few multiples of the agent's
+poll interval" — computed server-side/DB-side against its own clock, not
+by mixing timezones between two systems.
+
+**`POST /command`** *(for your phone app, not called by the agent)* —
+validate `command` against a whitelist (`BLOCK`/`ALLOW` only) and 404 on
+an unknown `device_uuid` before inserting.
+```
+Request:  {device_uuid, command}
+Response: {ok: true, id}
+```
+
+A reference implementation of exactly this contract (PHP + MySQL, tested
+against a real database) existed earlier in this project's history if you
+want to see a worked example — check the git log for "cloud server" —
+but isn't kept in the repo since the server is now yours to build.
 
 ## Known limitation: blocking is all-or-nothing (for now)
 
 `BLOCK` currently disables the OS network layer entirely (Windows Firewall
 rules / macOS `networksetup` / Linux `nmcli networking off`). That also
 severs the agent's own connection to the server — so today, a laptop
-blocked by a remote command **cannot receive a remote `ALLOW`** until the
-server exists with an allow-listing scheme (see "Next steps" below).
+blocked by a remote command **cannot receive a remote `ALLOW`** until your
+server implements an allow-listing scheme (permit outbound traffic to the
+server's own IP/port so a "blocked" laptop can still poll).
 
 As a safety net so a laptop is never stranded: every `BLOCK` arms an
 **auto-revert timer** (`autoRevertMinutes` in `config.json`, default 60)
-that automatically calls `ALLOW` when it elapses, whoever issued the
-original block. You can also always unblock locally via the tray menu or
+that automatically calls `ALLOW` when it elapses, regardless of server
+connectivity. You can also always unblock locally via the tray menu or
 dashboard, which don't depend on the network being up.
-
-(This applies just as much to HTTP polling as it would have to a
-WebSocket — a full network block stops the agent's heartbeat requests
-from leaving the machine at all, regardless of transport.)
 
 ## Project layout
 
@@ -113,9 +156,10 @@ npm install       # pulls electron, electron-builder, sudo-prompt
 npm start         # launches the tray app
 ```
 
-Before it'll do anything useful against a real server, deploy
-`../cloud-server` to your cPanel (see its README) and set `serverBaseUrl`
-+ `apiKey` in this agent's `config.json` to match.
+Point it at your API: edit `config.json` (created on first run in the
+OS's per-app data directory) and set `serverBaseUrl` to your API's base
+URL and `apiKey` to match whatever your server checks the agent's
+`X-Api-Key` header against.
 
 First launch creates `config.json`, `device.json`, and a `logs/` folder in
 the OS's standard per-app data directory (e.g. `~/.config/laptop-agent` on
@@ -149,15 +193,16 @@ correctly, the dashboard UI renders and reflects state changes correctly
 (screenshotted via CDP), and the auto-revert timer fires and calls
 `allow()` correctly.
 
-The `connection.js` HTTP polling client was verified against the **real,
-unmodified `cloud-server` PHP files running on a real MariaDB instance** —
-not a stub. The test: the agent registered, polled, and showed
-"connected"; a script playing the role of the future phone app enqueued a
-`BLOCK` via `/command.php` using the admin key; the agent's next poll
-picked it up, applied it (network module mocked — see below), and acked
-it; and the server's `/devices.php` correctly showed the device as
-blocked afterward. That's the full phone→server→agent→server loop, proven
-with real code on both ends.
+The `connection.js` polling logic (register → heartbeat → apply command →
+ack, retry-on-failure, one-command-per-tick) was proven correct end-to-end
+against a real reference server implementing the contract above, backed
+by a real database — not a stub. That reference server has since been
+removed from the repo (see "Cloud server contract" above), so **whatever
+you build to replace it hasn't itself been tested yet** — only the
+contract and the agent's side of it have. Re-verify once your server
+exists, especially: the `heartbeat` "at most one command, marked
+delivered immediately" behavior, and that `register` is a true upsert
+(the agent calls it every startup).
 
 **Not exercised for real**: the actual `netsh` / `networksetup` / `nmcli`
 commands were never run for real during development — doing so inside a
@@ -169,15 +214,15 @@ something behaves unexpectedly.
 
 ## Next steps (not built yet)
 
-1. **Allow-listing fix** for the all-or-nothing block limitation above:
-   instead of a blanket block, permit outbound traffic to the server's
-   IP/port so a blocked laptop can still poll and receive `ALLOW`,
-   removing the dependency on the auto-revert timer. Lives in both
-   `network/*.php` here and the server's docs.
-2. **Phone app**: device list, last-activity display, Block/Allow buttons
-   — talks to `cloud-server`'s `/devices.php` and `/command.php`, never
+1. **Your cloud server**, implementing the contract above.
+2. **Allow-listing fix** for the all-or-nothing block limitation: instead
+   of a blanket block, permit outbound traffic to the server's IP/port so
+   a blocked laptop can still poll and receive `ALLOW`, removing the
+   dependency on the auto-revert timer.
+3. **Phone app**: device list, last-activity display, Block/Allow buttons
+   — talks to your server's `GET /devices` and `POST /command`, never
    directly to the agent.
-3. Later: per-domain rules/categories, scheduling, and real activity
+4. Later: per-domain rules/categories, scheduling, and real activity
    monitoring (the current build has no traffic inspection — that needs a
    local proxy or OS-level DNS/connection logging, deliberately deferred
    per the project's own MVP phasing).

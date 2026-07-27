@@ -4,14 +4,16 @@ const path = require("path");
 const crypto = require("crypto");
 
 const DEFAULTS = {
-  // Base URL of the PHP cloud-server (see ../cloud-server), no trailing
-  // slash — e.g. "https://yourdomain.com/agent-api". The agent POSTs
-  // /register.php once, then polls /heartbeat.php on an interval.
-  serverBaseUrl: "https://your-domain.example.com/agent-api",
-  // Must match DEVICE_API_KEY in the server's config.php.
+  // Base URL of the cloud server's API, no trailing slash — e.g.
+  // "https://your-api.example.com". The agent POSTs /register once, then
+  // polls /heartbeat on an interval. See README's "Cloud server contract"
+  // for the exact request/response shapes the server must implement.
+  serverBaseUrl: "https://your-api.example.com",
+  // Must match whatever the server checks the X-Api-Key header against
+  // for device-facing endpoints.
   apiKey: "change-me-device-key",
   // How often to poll the server, in milliseconds. Lower = commands
-  // arrive faster; higher = fewer requests against shared hosting.
+  // arrive faster; higher = fewer requests against the server.
   pollIntervalMs: 10000,
   // Passphrase required to quit the agent or open the local dashboard's
   // unblock action from an untrusted user's perspective. Change this on
