@@ -205,9 +205,11 @@ src/
   state.js               Shared in-memory state + change events
   controller.js           Applies BLOCK/ALLOW, owns the auto-revert timer
   connection.js            Polls SupaBein directly — register/heartbeat/passphrase-sync/command
-  supabein.js               Thin anon Data API client (list/findOne/insert/update)
-  time.js                    nowMysqlUtc() — UTC DATETIME formatting for last_seen etc.
-  device.js                   Stable device identity
+  updater.js                Self-update: checks agent_releases, verifies + applies (service build only, see below)
+  version.js                  Single source of truth for the running version
+  supabein.js                  Thin anon Data API client (list/findOne/insert/update)
+  time.js                       nowMysqlUtc() — UTC DATETIME formatting for last_seen etc.
+  device.js                      Stable device identity
   config.js                    Local settings (poll interval, allow-list, cached passphrase hash, auto-revert minutes)
   logger.js                     Rotating file + console logger
   autostart.js                   Login-item registration (cross-platform, Electron build only)
@@ -228,6 +230,7 @@ scripts/
   install-service.js             Installs the Windows Service (see below)
   uninstall-service.js           Removes it
   build-service-installer.sh     Builds the turnkey service installer (see below)
+  publish-release.js             Publishes a self-update to agent_releases (see below)
 build/
   service-installer.nsi          NSIS source for LaptopAgentService-Setup.exe
   stage/                          Build output, gitignored — staged files before compiling
@@ -355,6 +358,99 @@ npm run service:uninstall
 This unregisters the service but deliberately leaves the ProgramData
 folder in place (config/logs); delete it manually as Administrator if you
 want no trace left at all.
+
+### Self-updating service
+
+The Windows Service checks SupaBein for a newer published version every
+`updateCheckIntervalMs` (default 1 hour, plus once ~30s after boot) and
+applies it automatically — no reinstall, no visit to the machine needed
+to ship a bug fix or a new feature to `src/service-main.js` and the
+modules it uses.
+
+**How it stays safe to leave wide open to "checking for updates" on a
+schedule**: the delivery channel (`agent_releases`, a new SupaBein table)
+is **read-only for anon** — `SELECT` only, `INSERT`/`UPDATE`/`DELETE` all
+denied (verified: anon `INSERT` gets a 403 `Policy denies this
+operation`). Publishing a release requires the SupaBein project's owner
+PAT — the same credential every other setup step in this README already
+needs, never embedded in the shipped agent. This matters because a
+self-updating channel into a SYSTEM-level service is, structurally, a
+remote-code-execution channel — the whole point of making it read-only
+by default is that discovering the table (trivial — it's named in this
+public repo) doesn't grant anyone the ability to push code, only to read
+what's already been published.
+
+**What `src/updater.js` actually does**, every check:
+1. Reads the newest row from `agent_releases` (`order: id.desc`, so
+   publish order — not string-sorting `version`, which breaks on values
+   like "1.10.0" vs "1.9.0" — decides "newest").
+2. If its `version` matches the running `src/version.js`, stops — already
+   current.
+3. Recomputes SHA-256 of the row's `manifest` (a JSON array of
+   `{path, content}`, content base64-encoded) and compares to the row's
+   `sha256` column. Mismatch → rejected, logged, nothing touched. This is
+   a **data-integrity** check (catches corruption or a botched publish),
+   not authentication — the anon-`INSERT`-denied policy is the actual
+   gate on who can publish.
+4. Validates every `path` against a strict allowlist regex (a plain
+   filename, optionally one `subfolder/`, ending in `.js` — anything with
+   `..`, a second `/`, a leading `/`, or a drive letter is rejected
+   outright) and re-checks the resolved path still lands inside `src/`
+   before touching disk, in case the regex is ever loosened later without
+   updating this comment.
+5. Syntax-checks every decoded file with `vm.Script` (parses, never
+   executes) — a broken file in a bad publish is rejected before
+   anything is written, not discovered by crash-looping afterward.
+6. Backs up every file about to be overwritten into `src/.backups/<timestamp>/`
+   (manual rollback only — see limitation below), then writes all new
+   file contents to `*.updating` temp files and renames them into place
+   only after every single write succeeds — a disk error partway through
+   can't leave a half-updated, broken file set.
+7. Exits the process (`process.exit(0)`). It doesn't restart itself
+   directly — `node-windows`'s `wrapper.js` (the process that actually
+   `fork()`s `service-main.js` and is what WinSW's service wrapper keeps
+   alive) treats **any** exit of its child as "restart it" by default
+   (confirmed by reading `wrapper.js` directly — `abortonerror` defaults
+   to `no`, so even a non-zero exit gets relaunched, up to its own
+   restart-throttling within a 60s window). The freshly-forked process
+   loads the new files from disk — no in-process module-cache tricks
+   needed.
+
+**Shipping an update**: bump `AGENT_VERSION` in `src/version.js`, then
+(with the owner PAT):
+```bash
+SUPABEIN_PAT=... node scripts/publish-release.js 1.1.0 "optional changelog notes"
+```
+This bundles the exact same file list as `build-service-installer.sh`
+(keep the two in sync if you add a new module), computes the manifest
+hash, and inserts one row. Every device with the service running picks
+it up within its next check.
+
+**Known limitation**: rollback is manual, not automatic. If a bad update
+somehow passes the syntax check but is still logically broken (throws at
+runtime instead of at parse time), the service will crash-loop — but
+firewall BLOCK/ALLOW state is independent of the agent process (it's
+OS-level, applied by `network/windows.js` and left in place regardless of
+whether the agent is currently running), and the existing `autoRevertMinutes`
+safety net still fires from whatever state was last applied, so a bad
+update can't itself strand a device blocked forever. Fixing a
+crash-looping device still requires either publishing a corrected release
+(same channel, applies once the process manages to run long enough to
+check again) or manual intervention on the machine — restoring a file
+from `src/.backups/` and restarting the service.
+
+**Verified** against the real live SupaBein project directly: a full
+publish → detect → hash-verify → apply → version-file-updated →
+process.exit(0) round trip (with the actual `Controller`/`Connection`
+mocked out of the loop, not the updater itself); and three rejection
+paths individually confirmed to leave the file set untouched — a wrong
+`sha256`, a path-traversal attempt (`../../../evil.js`, caught by the
+regex before ever reaching the filesystem), and a syntax-broken payload.
+All test rows were deleted from `agent_releases` afterward. **Not
+verified**: the actual `wrapper.js` restart-on-exit behavior under a real
+Windows Service Control Manager (reasoned through by reading its source,
+not observed running) — same no-Windows-machine caveat as everywhere
+else in this README.
 
 ### What this does and doesn't cover
 

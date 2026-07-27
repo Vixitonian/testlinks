@@ -8,6 +8,8 @@ const { loadOrCreateDevice } = require("./device");
 const { AgentState } = require("./state");
 const { Controller } = require("./controller");
 const { Connection } = require("./connection");
+const { checkForUpdate } = require("./updater");
+const { AGENT_VERSION } = require("./version");
 
 /**
  * Headless entry point for running as a genuine Windows Service (see
@@ -17,6 +19,11 @@ const { Connection } = require("./connection");
  * standard user account has no way to stop a SYSTEM-owned service without
  * admin credentials, so none of that per-user tamper-deterrence is needed
  * here. Reuses every core module unchanged from the Electron build.
+ *
+ * Self-updating: periodically checks SupaBein for a newer published
+ * version and applies it in place, then exits so the service wrapper
+ * relaunches with the new files — see updater.js. Electron build doesn't
+ * do this; it's specific to this headless service entry point.
  */
 function getDataDir() {
   if (process.platform === "win32") {
@@ -31,7 +38,7 @@ function getDataDir() {
 async function main() {
   const dataDir = getDataDir();
   const logger = new Logger(path.join(dataDir, "logs"));
-  logger.info("Laptop Agent service starting");
+  logger.info(`Laptop Agent service starting (version ${AGENT_VERSION})`);
 
   const config = new Config(dataDir);
   const device = loadOrCreateDevice(dataDir);
@@ -50,6 +57,13 @@ async function main() {
     pollIntervalMs: config.get("pollIntervalMs")
   });
   connection.start();
+
+  // Periodically check for a newer published version and self-apply it —
+  // see updater.js and README's "Self-updating service" section. One
+  // check shortly after boot, then on the configured interval.
+  const updateIntervalMs = Number(config.get("updateCheckIntervalMs")) || 60 * 60 * 1000;
+  setTimeout(() => checkForUpdate(logger), 30_000);
+  setInterval(() => checkForUpdate(logger), updateIntervalMs);
 
   logger.info("Laptop Agent service ready");
 

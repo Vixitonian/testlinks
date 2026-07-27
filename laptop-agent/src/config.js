@@ -29,7 +29,11 @@ const DEFAULTS = {
   // until a firewall allow-list punch-through exists server-side.
   // Automatically lift the block after this many minutes so a laptop can
   // never be stranded offline indefinitely.
-  autoRevertMinutes: 60
+  autoRevertMinutes: 60,
+  // How often the Windows Service checks SupaBein's agent_releases table
+  // for a new version to self-apply (see src/updater.js and README's
+  // "Self-updating service" section). Not used by the Electron build.
+  updateCheckIntervalMs: 60 * 60 * 1000
 };
 
 function hash(str) {

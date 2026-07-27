@@ -54,7 +54,9 @@ cp "$ROOT/scripts/install-service.js" "$ROOT/scripts/uninstall-service.js" "$STA
 
 # Only the modules service-main.js actually needs — no Electron/UI files
 # (main.js, tray.js, preload.js, autostart.js, ui/) since those require
-# "electron", which isn't present or needed in a headless service.
+# "electron", which isn't present or needed in a headless service. This
+# is also the exact file list scripts/publish-release.js bundles into a
+# self-update manifest — keep the two in sync.
 mkdir -p "$STAGE/src/network"
 cp "$ROOT/src/service-main.js" \
    "$ROOT/src/logger.js" \
@@ -65,6 +67,8 @@ cp "$ROOT/src/service-main.js" \
    "$ROOT/src/connection.js" \
    "$ROOT/src/supabein.js" \
    "$ROOT/src/time.js" \
+   "$ROOT/src/version.js" \
+   "$ROOT/src/updater.js" \
    "$STAGE/src/"
 cp "$ROOT/src/network/index.js" \
    "$ROOT/src/network/target.js" \
