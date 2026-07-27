@@ -36,10 +36,17 @@ svc.on("uninstall", () => {
     "Note: the ProgramData\\Laptop Agent folder (config.json, device.json, logs) was left in " +
     "place. Delete it manually (as Administrator) if you want to fully remove all traces."
   );
+  process.exit(0);
+});
+
+svc.on("alreadyuninstalled", () => {
+  console.log(`Service "${SERVICE_NAME}" was not installed — nothing to do.`);
+  process.exit(0);
 });
 
 svc.on("error", (err) => {
   console.error("node-windows reported an error:", err);
+  process.exit(1);
 });
 
 console.log(`Uninstalling "${SERVICE_NAME}" (requires admin)...`);

@@ -227,6 +227,13 @@ scripts/
   resolve-server-ips.js          One-time setup: prints the serverAllowIps/serverAllowPort to paste into config.json
   install-service.js             Installs the Windows Service (see below)
   uninstall-service.js           Removes it
+  build-service-installer.sh     Builds the turnkey service installer (see below)
+build/
+  service-installer.nsi          NSIS source for LaptopAgentService-Setup.exe
+  stage/                          Build output, gitignored — staged files before compiling
+  node-windows-deps/               Build output, gitignored — isolated node-windows dependency resolve
+runtime/
+  node.exe                       Portable Node.js runtime, gitignored — downloaded by the build script
 ```
 
 ## Tamper-resistant install for a child's account (Windows Service)
@@ -270,25 +277,76 @@ know to check Services — they just can't do anything about it from a
 standard account). This project won't build a version that hides from
 Task Manager or fakes a different name; see the intro above.
 
-### Installing it
+### Installing it — turnkey installer (recommended)
 
-1. On the target Windows machine, from an **elevated** (Run as
-   Administrator) terminal, in this folder:
-   ```
-   npm install
-   npm run service:install
-   ```
-   This pulls in `node-windows` (an optional, Windows-only dependency —
-   harmless if `npm install` can't build it on macOS/Linux, since nothing
-   else here depends on it) and registers + starts the service.
-2. Confirm it's running: open `services.msc` and look for "Laptop Agent"
+`LaptopAgentService-Setup.exe` (built via `npm run build:service-installer`,
+see "Building the installer" below) is a self-contained NSIS installer —
+nothing needs to be pre-installed on the target machine, not even Node.js.
+It bundles a portable copy of the Node.js runtime (`runtime/node.exe`)
+purely to run this app; nothing about that runtime is exposed or usable
+as a general-purpose Node install afterward.
+
+1. On the target Windows machine, run `LaptopAgentService-Setup.exe` and
+   click through it — it'll prompt for admin elevation (a UAC prompt),
+   which is required to register a Windows Service.
+2. The installer copies its files to `Program Files\Laptop Agent Service`,
+   then runs `scripts/install-service.js` (using its own bundled
+   `node.exe`, not any system Node) to register and start the service —
+   you'll see this happening live in the installer's details/log view.
+3. Confirm it's running: open `services.msc` and look for "Laptop Agent"
    (status "Running", startup type "Automatic").
-3. It reads `config.json` from `%ProgramData%\Laptop Agent\config.json`
-   (not the per-user `%APPDATA%` path the Electron build uses) — same
+4. It reads `config.json` from `%ProgramData%\Laptop Agent\config.json` —
    hardcoded defaults apply (see `src/config.js`), so no manual setup is
-   needed for it to reach SupaBein. If you do need to hand-edit it, do so
-   **before** running `service:install`, or as Administrator afterward —
-   a standard account won't be able to once the folder is locked down.
+   needed for it to reach SupaBein.
+
+To remove it: use "Laptop Agent Service" in Windows' *Add or remove
+programs*, or run `Program Files\Laptop Agent Service\Uninstall.exe`
+directly (also requires admin).
+
+**System requirement**: WinSW (the service wrapper `node-windows` uses
+under the hood, bundled in the installer) is a small .NET application, so
+the target machine needs .NET Framework — present by default on any
+Windows 10/11 install; only relevant on a heavily stripped-down or very
+old Windows build.
+
+#### Building the installer
+
+Requires `makensis` (NSIS) on `PATH`, and network access once (to
+download the portable Node.js runtime the first time):
+```bash
+npm run build:service-installer
+```
+Downloads `runtime/node.exe` if not already present, resolves
+`node-windows`'s full dependency tree in an isolated scratch install
+(**not** just `node_modules/node-windows` alone — its own dependencies,
+`xml`/`yargs`/etc., get hoisted to the top level by npm and are easy to
+miss; `wrapper.js`, the script that actually keeps running *inside* the
+installed service via WinSW, needs all of them present at runtime, not
+just at install time), stages everything into `build/stage/`, and
+compiles `build/service-installer.nsi` into
+`dist/LaptopAgentService-Setup.exe`. See `scripts/build-service-installer.sh`
+for the exact staged file list — deliberately just `service-main.js` and
+the core modules it needs (`config.js`, `device.js`, `state.js`,
+`controller.js`, `connection.js`, `supabein.js`, `time.js`, `logger.js`,
+`network/{index,target,windows}.js`), not the Electron/UI files
+(`main.js`, `tray.js`, `preload.js`, `autostart.js`, `ui/`), which
+`require("electron")` and aren't needed or usable in a headless service.
+
+### Installing from source (alternative)
+
+If you'd rather not use the prebuilt installer — e.g. building on a
+machine that already has Node.js — the underlying steps are exposed
+directly. From an **elevated** (Run as Administrator) terminal, in this
+folder:
+```
+npm install
+npm run service:install
+```
+This pulls in `node-windows` (an optional, Windows-only dependency —
+harmless if `npm install` can't build it on macOS/Linux, since nothing
+else here depends on it) and registers + starts the service using
+whatever `node` is already on `PATH`, rather than a bundled copy. Same
+`config.json` location and defaults as above.
 
 To remove it later (also requires an elevated terminal):
 ```
@@ -324,13 +382,26 @@ Like the rest of this project's OS-level integrations, `service-main.js`'s
 core logic (`Config`, `loadOrCreateDevice`, `AgentState`, `Controller`,
 `Connection`) was verified headlessly here by direct invocation against
 the real live SupaBein project — same modules, same code path as the
-Electron build, just without Electron wrapping them. `node-windows`'s
-actual service registration, the Session-0 no-UI behavior, and the
-`icacls` hardening were **not** run against a real Windows Service Control
-Manager from this environment (no Windows machine available here) —
-verify the install steps above on an actual machine before relying on
-this for a child's account, the same caveat as this README's firewall
-commands above.
+Electron build, just without Electron wrapping them.
+
+The installer itself was built and inspected, not run: `makensis`
+compiled `build/service-installer.nsi` cleanly, and the resulting
+`LaptopAgentService-Setup.exe` was unpacked (via `7z l`, since NSIS
+archives are inspectable without a Windows machine) and confirmed to
+contain exactly the intended files at the intended relative paths —
+`runtime/node.exe`, the full `node-windows` dependency tree (18 packages;
+an earlier version of the build script shipped `node-windows` alone,
+missing its own hoisted `xml`/`yargs` dependencies that `wrapper.js`
+needs at service runtime — caught by resolving module paths from the
+staged tree with plain Node before rebuilding), and the trimmed `src/`
+module set. `node-windows`'s actual service registration (the WinSW XML
+generation, `winsw.exe install`/`start`, and the Session-0 no-UI running
+service), the `icacls` hardening, and the installer's own UAC/wizard flow
+were **not** run against a real Windows Service Control Manager from this
+environment (no Windows machine available here) — install it on an
+actual machine and confirm "Laptop Agent" shows Running in `services.msc`
+before relying on this for a child's account, the same caveat as this
+README's firewall commands above.
 
 ## Running it
 

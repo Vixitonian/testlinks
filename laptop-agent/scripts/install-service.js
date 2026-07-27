@@ -43,7 +43,7 @@ try {
 const svc = new Service({
   name: SERVICE_NAME,
   description:
-    "Identifies this device, connects to the family control server, and applies Block/Allow " +
+    "Identifies this device, connects directly to SupaBein, and applies Block/Allow " +
     "internet commands. Visible in Services and Task Manager as \"Laptop Agent\".",
   script: path.join(__dirname, "..", "src", "service-main.js")
 });
@@ -56,15 +56,23 @@ svc.on("install", () => {
 
 svc.on("start", () => {
   console.log(`Service "${SERVICE_NAME}" started. Check services.msc to confirm — it should show as "Running".`);
+  process.exit(0);
 });
 
 svc.on("alreadyinstalled", () => {
   console.log(`Service "${SERVICE_NAME}" is already installed.`);
   hardenDataDir();
+  process.exit(0);
+});
+
+svc.on("invalidinstallation", () => {
+  console.error(`Service "${SERVICE_NAME}" has a broken/partial prior installation. Run uninstall-service.js first.`);
+  process.exit(1);
 });
 
 svc.on("error", (err) => {
   console.error("node-windows reported an error:", err);
+  process.exit(1);
 });
 
 console.log(`Installing "${SERVICE_NAME}" as a Windows Service (requires admin)...`);
