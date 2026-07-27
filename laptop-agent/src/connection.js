@@ -1,37 +1,33 @@
 "use strict";
-const http = require("http");
-const https = require("https");
-const { URL } = require("url");
+const supabein = require("./supabein");
+const { nowMysqlUtc } = require("./time");
 
 /**
- * Talks to whatever cloud server is configured (any HTTP API reachable
- * via fetch/plain HTTP — a serverless function, a small Express app,
- * anything) by polling on an interval rather than holding a socket open.
+ * Talks directly to SupaBein's Data API (see supabein.js) by polling on
+ * an interval rather than holding a socket open. No cloud-api middle
+ * server — see README's "Talks directly to SupaBein" section for why.
  * Every tick:
- *   1. register (once, lazily, retried until it succeeds)
- *   2. heartbeat — reports current status, receives at most one pending
- *      command in the same response
- *   3. if a command came back: apply it via Controller, then ack it
- *
- * Endpoint contract the server must implement — see README's "Cloud
- * server contract" section for full request/response shapes:
- *   POST {base}/register   {device_uuid, hostname, platform, ...}   -> {ok}
- *   POST {base}/heartbeat  {device_uuid, internet_blocked}          -> {ok, command: {id, command} | null}
- *   POST {base}/ack        {device_uuid, command_id, ok, error?}    -> {ok}
- * All requests carry an X-Api-Key header matching the server's device key.
+ *   1. register (once, lazily, retried until it succeeds) — upsert this
+ *      device's row in `devices` keyed on device_uuid
+ *   2. heartbeat — update `devices` with current status
+ *   3. sync the shared quit/unblock passphrase from `settings` — lets the
+ *      phone app change it centrally (see README's "Shared passphrase"
+ *      section) and have it take effect here within one poll interval
+ *   4. check `commands` for a pending row for this device; if found, mark
+ *      it delivered, apply it via Controller, then mark it acked/failed
  */
 class Connection {
-  constructor({ baseUrl, apiKey, device, state, controller, logger, pollIntervalMs }) {
-    this.baseUrl = String(baseUrl).replace(/\/+$/, "");
-    this.apiKey = apiKey;
+  constructor({ device, state, controller, config, logger, pollIntervalMs }) {
     this.device = device;
     this.state = state;
     this.controller = controller;
+    this.config = config;
     this.logger = logger;
     this.pollIntervalMs = pollIntervalMs || 10000;
     this._timer = null;
     this._stopped = true;
     this._registered = false;
+    this._deviceRowId = null;
   }
 
   start() {
@@ -50,36 +46,34 @@ class Connection {
 
     try {
       if (!this._registered) {
-        await this._post("/register", {
-          device_uuid: this.device.id,
-          hostname: this.device.hostname,
-          platform: this.device.platform,
-          osRelease: this.device.osRelease,
-          username: this.device.username
-        });
+        await this._register();
         this._registered = true;
       }
 
-      const res = await this._post("/heartbeat", {
-        device_uuid: this.device.id,
-        internet_blocked: this.state.internetBlocked
-      });
+      await this._heartbeat();
       this.state.patch({ connectionStatus: "connected", lastError: null });
 
-      if (res.command) {
-        this.logger.info(`Server has a command waiting: ${res.command.command} (id ${res.command.id})`);
-        const result = await this.controller.applyCommand(res.command.command, "server");
-        await this._post("/ack", {
-          device_uuid: this.device.id,
-          command_id: res.command.id,
-          ok: result.ok,
+      await this._syncPassphrase();
+
+      const pending = await supabein.findOne(
+        "commands",
+        { device_uuid: this.device.id, status: "pending" },
+        { order: "id.asc" }
+      );
+      if (pending) {
+        this.logger.info(`SupaBein has a command waiting: ${pending.command} (id ${pending.id})`);
+        await supabein.update("commands", pending.id, { status: "delivered" });
+        const result = await this.controller.applyCommand(pending.command, "server");
+        await supabein.update("commands", pending.id, {
+          status: result.ok ? "acked" : "failed",
+          acked_at: nowMysqlUtc(),
           error: result.error || null
         });
       }
     } catch (e) {
-      this.logger.warn(`Server poll failed: ${e.message}`);
+      this.logger.warn(`SupaBein poll failed: ${e.message}`);
       this.state.patch({ connectionStatus: "disconnected" });
-      // A failed register this tick just gets retried next tick.
+      // A failed register/heartbeat this tick just gets retried next tick.
     } finally {
       if (!this._stopped) {
         this._timer = setTimeout(() => this._tick(), this.pollIntervalMs);
@@ -87,47 +81,47 @@ class Connection {
     }
   }
 
-  _post(path, body) {
-    return new Promise((resolve, reject) => {
-      let url;
-      try {
-        url = new URL(this.baseUrl + path);
-      } catch (e) {
-        return reject(new Error(`Invalid serverBaseUrl: ${e.message}`));
-      }
-      const payload = JSON.stringify(body);
-      const lib = url.protocol === "https:" ? https : http;
+  async _register() {
+    const patch = {
+      hostname: this.device.hostname,
+      platform: this.device.platform,
+      os_release: this.device.osRelease || "",
+      username: this.device.username || "",
+      last_seen: nowMysqlUtc()
+    };
+    const existing = await supabein.findOne("devices", { device_uuid: this.device.id });
+    if (existing) {
+      this._deviceRowId = existing.id;
+      await supabein.update("devices", existing.id, patch);
+    } else {
+      const row = await supabein.insert("devices", {
+        device_uuid: this.device.id,
+        internet_blocked: false,
+        ...patch
+      });
+      this._deviceRowId = row.id;
+    }
+  }
 
-      const req = lib.request(
-        url,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Content-Length": Buffer.byteLength(payload),
-            "X-Api-Key": this.apiKey
-          },
-          timeout: 15000
-        },
-        (resp) => {
-          let data = "";
-          resp.on("data", (chunk) => { data += chunk; });
-          resp.on("end", () => {
-            if (resp.statusCode < 200 || resp.statusCode >= 300) {
-              return reject(new Error(`HTTP ${resp.statusCode} from ${path}: ${data.slice(0, 200)}`));
-            }
-            try {
-              resolve(JSON.parse(data));
-            } catch (e) {
-              reject(new Error(`Invalid JSON from ${path}: ${e.message}`));
-            }
-          });
-        }
-      );
-      req.on("error", reject);
-      req.on("timeout", () => req.destroy(new Error(`Request to ${path} timed out`)));
-      req.write(payload);
-      req.end();
+  async _syncPassphrase() {
+    if (!this.config) return;
+    const row = await supabein.findOne("settings", { setting_key: "passphrase_hash" });
+    if (row && row.value && row.value !== this.config.get("quitPassphraseHash")) {
+      this.config.set("quitPassphraseHash", row.value);
+      this.logger.info("Quit/unblock passphrase updated from SupaBein");
+    }
+  }
+
+  async _heartbeat() {
+    if (this._deviceRowId == null) {
+      // Row may have gone missing since register() (e.g. deleted directly
+      // in SupaBein) — re-register instead of updating a nonexistent id.
+      await this._register();
+      return;
+    }
+    await supabein.update("devices", this._deviceRowId, {
+      internet_blocked: this.state.internetBlocked,
+      last_seen: nowMysqlUtc()
     });
   }
 }

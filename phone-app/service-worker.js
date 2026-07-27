@@ -1,14 +1,15 @@
 "use strict";
 // Caches only the static app shell so the PWA still loads (with cached
-// data, if any was ever fetched successfully) when offline. API calls to
-// the cloud server always go to the network — device status must never
-// be served stale from a cache.
+// data, if any was ever fetched successfully) when offline. Calls to
+// SupaBein's Data API always go to the network — device status must
+// never be served stale from a cache.
 
-const CACHE_NAME = "device-control-shell-v1";
+const CACHE_NAME = "device-control-shell-v2";
 const SHELL_FILES = [
   "./",
   "./index.html",
   "./styles.css",
+  "./supabein.js",
   "./app.js",
   "./manifest.json"
 ];

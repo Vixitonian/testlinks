@@ -20,6 +20,7 @@
         <p class="muted small">Family devices</p>
       </div>
     </div>
+    <button id="settingsBtn" class="icon-btn hide" title="Change passcode">⚙</button>
   </header>
 
   <main>
@@ -32,6 +33,26 @@
           <button type="submit" class="btn primary">Unlock</button>
         </form>
         <p class="fail-note hide" id="loginError">Incorrect passcode.</p>
+      </div>
+    </section>
+
+    <section id="settingsScreen" class="hide">
+      <div class="card">
+        <h2 class="login-title">Change passcode</h2>
+        <p class="muted small">
+          Applies everywhere — this same passcode also unlocks the laptop
+          agent's Allow Internet and Quit actions. Takes effect there
+          within one poll cycle (a few seconds).
+        </p>
+        <form id="settingsForm">
+          <input type="password" id="currentPasscodeInput" autocomplete="current-password" placeholder="Current passcode" class="input" />
+          <input type="password" id="newPasscodeInput" autocomplete="new-password" placeholder="New passcode" class="input" />
+          <input type="password" id="confirmPasscodeInput" autocomplete="new-password" placeholder="Confirm new passcode" class="input" />
+          <button type="submit" class="btn primary">Save new passcode</button>
+          <button type="button" id="settingsCancel" class="btn">Cancel</button>
+        </form>
+        <p class="fail-note hide" id="settingsError"></p>
+        <p class="muted small hide" id="settingsSuccess">Passcode updated.</p>
       </div>
     </section>
 
@@ -48,6 +69,7 @@
 
   <footer class="muted small">Updates automatically every few seconds.</footer>
 
+  <script src="supabein.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

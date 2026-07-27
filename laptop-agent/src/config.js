@@ -4,25 +4,21 @@ const path = require("path");
 const crypto = require("crypto");
 
 const DEFAULTS = {
-  // Base URL of the cloud server's API, no trailing slash. Hardcoded to
-  // this project's live deployment (../cloud-api on Render) so a fresh
-  // install works immediately with no manual config editing — matching
-  // the same choice made for the phone app. Point this elsewhere by
-  // editing config.json if you deploy your own cloud-api instance.
-  serverBaseUrl: "https://device-control-cloud-api.onrender.com",
-  // Must match the live deployment's DEVICE_API_KEY.
-  apiKey: "3d3dfa275d869feae65519a868b5d5646309ea51d5fbcceb55c4e7a99f65fbd2",
-  // How often to poll the server, in milliseconds. Lower = commands
-  // arrive faster; higher = fewer requests against the server.
+  // How often to poll SupaBein, in milliseconds. Lower = commands arrive
+  // faster; higher = fewer requests. No server URL/API key to configure
+  // here anymore — src/supabein.js talks directly to SupaBein's Data API
+  // (project 79) with no credential at all (anon access, scoped by
+  // SupaBein's own row policies to just the devices/commands tables —
+  // see README's "Talks directly to SupaBein" section).
   pollIntervalMs: 10000,
   // Hardcoded IP(s) + port to allow-list when BLOCK is applied, so the
-  // agent's own connection to the server survives being "blocked" (see
-  // README's "Blocking allow-lists the control server" section). Static
-  // rather than resolved via DNS at block-time — simpler and more
-  // predictable, at the cost of needing a manual update if the server's
-  // IP ever changes. Regenerate with:
-  //   node scripts/resolve-server-ips.js <serverBaseUrl>
-  serverAllowIps: ["216.24.57.7", "216.24.57.15"],
+  // agent's own connection to SupaBein survives being "blocked" (see
+  // README's "Blocking allow-lists SupaBein" section). Static rather than
+  // resolved via DNS at block-time — simpler and more predictable, at the
+  // cost of needing a manual update if SupaBein's IP ever changes.
+  // Regenerate with:
+  //   node scripts/resolve-server-ips.js https://supabein.dxinnovationhub.com
+  serverAllowIps: ["198.54.116.175"],
   serverAllowPort: 443,
   // Passphrase required to quit the agent or open the local dashboard's
   // unblock action from an untrusted user's perspective. This is NOT a
@@ -45,7 +41,7 @@ class Config {
     this.file = path.join(userDataDir, "config.json");
     const existed = fs.existsSync(this.file);
     this.data = this._load();
-    if (!existed) this.save(); // persist defaults so the file is there to hand-edit (e.g. serverBaseUrl)
+    if (!existed) this.save(); // persist defaults so the file is there to hand-edit (e.g. pollIntervalMs)
   }
 
   _load() {

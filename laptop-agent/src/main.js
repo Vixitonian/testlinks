@@ -22,6 +22,7 @@ let logger, config, device, state, controller, connection, tray;
 let dashboardWin = null;
 let promptWin = null;
 let quitApproved = false;
+let promptPurpose = null; // "quit" | "allow" — which action the open passphrase prompt is for
 
 app.on("second-instance", () => {
   openDashboard();
@@ -41,11 +42,10 @@ app.whenReady().then(async () => {
   await controller.init();
 
   connection = new Connection({
-    baseUrl: config.get("serverBaseUrl"),
-    apiKey: config.get("apiKey"),
     device,
     state,
     controller,
+    config,
     logger,
     pollIntervalMs: config.get("pollIntervalMs")
   });
@@ -61,7 +61,8 @@ app.whenReady().then(async () => {
     state,
     controller,
     onOpenDashboard: openDashboard,
-    onQuitRequest: openQuitPrompt
+    onAllowRequest: () => openPassphrasePrompt("allow"),
+    onQuitRequest: () => openPassphrasePrompt("quit")
   });
 
   // Forward every state change to any open renderer windows.
@@ -78,14 +79,29 @@ app.whenReady().then(async () => {
 
 function registerIpcHandlers() {
   ipcMain.handle("state:get", () => state.snapshot());
+  // Block is never passphrase-gated — restricting internet needs no
+  // confirmation, only lifting a restriction does (see requestAllow below).
   ipcMain.handle("action:block", () => controller.applyCommand("BLOCK", "dashboard"));
-  ipcMain.handle("action:allow", () => controller.applyCommand("ALLOW", "dashboard"));
   ipcMain.handle("passphrase:verify", (_evt, pass) => ({ ok: config.checkPassphrase(pass) }));
+  ipcMain.handle("prompt:getPurpose", () => promptPurpose);
 
-  ipcMain.on("quit:confirmed", () => {
-    quitApproved = true;
-    logger.info("Quit approved via passphrase prompt");
-    app.quit();
+  // Dashboard's Allow button doesn't apply ALLOW directly — it opens the
+  // same passphrase prompt the tray menu uses.
+  ipcMain.on("action:requestAllow", () => openPassphrasePrompt("allow"));
+
+  // Fired only after prompt.js has already confirmed the passphrase via
+  // passphrase:verify above — this handler trusts that check happened in
+  // this same trusted main process, not the renderer.
+  ipcMain.on("action:confirmed", () => {
+    if (promptPurpose === "quit") {
+      quitApproved = true;
+      logger.info("Quit approved via passphrase prompt");
+      app.quit();
+    } else if (promptPurpose === "allow") {
+      logger.info("Allow approved via passphrase prompt");
+      controller.applyCommand("ALLOW", "dashboard-passphrase");
+      if (promptWin && !promptWin.isDestroyed()) promptWin.close();
+    }
   });
 
   ipcMain.on("window:close", (evt) => {
@@ -117,8 +133,10 @@ function openDashboard() {
   dashboardWin.on("closed", () => { dashboardWin = null; });
 }
 
-function openQuitPrompt() {
+function openPassphrasePrompt(purpose) {
+  promptPurpose = purpose;
   if (promptWin && !promptWin.isDestroyed()) {
+    promptWin.webContents.send("prompt:purposeChanged", purpose);
     promptWin.show();
     promptWin.focus();
     return;
@@ -127,7 +145,7 @@ function openQuitPrompt() {
     width: 340,
     height: 260,
     resizable: false,
-    title: "Confirm Quit",
+    title: purpose === "quit" ? "Confirm Quit" : "Confirm Allow Internet",
     parent: dashboardWin || undefined,
     modal: !!dashboardWin,
     icon: path.join(__dirname, "..", "assets", "icon.png"),
@@ -139,7 +157,7 @@ function openQuitPrompt() {
   });
   promptWin.setMenuBarVisibility(false);
   promptWin.loadFile(path.join(__dirname, "ui", "prompt.html"));
-  promptWin.on("closed", () => { promptWin = null; });
+  promptWin.on("closed", () => { promptWin = null; promptPurpose = null; });
 }
 
 // Background agents must survive their windows closing — only the

@@ -1,29 +1,28 @@
 "use strict";
-const config = require("./config");
 
 /**
- * Thin client for SupaBein's Data API, authenticated with a project
- * owner token (bypasses all row policies, same as a service_key would).
- * This is the ONLY module in this codebase that ever touches that token —
- * everything else calls these functions instead of building SupaBein
- * requests itself, so there's exactly one place to audit.
+ * Thin client for SupaBein's Data API, called directly (no cloud-api
+ * middle server — see README's "Talks directly to SupaBein" section).
+ * Uses no Authorization header at all: the `devices` and `commands`
+ * tables were granted anon SELECT/INSERT/UPDATE (no DELETE) specifically
+ * so this agent and the phone app can both read/write them with zero
+ * embedded credential. Every other table in this SupaBein project has no
+ * policies at all, so anon access here can't reach anything beyond these
+ * two tables regardless.
  *
  * Filter/response shapes per https://supabein.dxinnovationhub.com/docs:
- *   GET  /data/:project/:table?col=value&col2=op.value&order=col.dir&limit=N
- *        -> {data: [...], count, limit, offset}
- *   POST /data/:project/:table            -> the created row, unwrapped
- *   PATCH /data/:project/:table/:id       -> the updated row, unwrapped
- * IDs are numbers. A unique-column conflict is a 409, not a generic error.
+ *   GET  /data/:project/:table?col=value&order=col.dir&limit=N -> {data: [...], count, limit, offset}
+ *   POST /data/:project/:table      -> the created row, unwrapped
+ *   PATCH /data/:project/:table/:id -> the updated row, unwrapped
  */
 
+const PROJECT_ID = 79;
+const BASE = "https://supabein.dxinnovationhub.com/api/v1";
+
 async function request(method, path, body) {
-  const url = `${config.supabeinBase}/data/${config.supabeinProjectId}${path}`;
-  const res = await fetch(url, {
+  const res = await fetch(`${BASE}/data/${PROJECT_ID}${path}`, {
     method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.supabeinToken}`
-    },
+    headers: { "Content-Type": "application/json" },
     body: body !== undefined ? JSON.stringify(body) : undefined
   });
   const text = await res.text();

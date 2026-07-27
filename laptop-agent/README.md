@@ -1,20 +1,22 @@
 # Laptop Agent
 
 A visible, background Electron app that identifies a laptop, keeps a
-connection to a cloud server, and applies `BLOCK` / `ALLOW` internet
-commands. This is component 1 of the three-part system described in the
-project brief:
+connection to SupaBein, and applies `BLOCK` / `ALLOW` internet commands.
+This is component 1 of the two-part system described in the project
+brief:
 
 ```
-Phone App  →  Cloud Server  →  Laptop Agent   (this folder)
+Phone App  →  SupaBein (shared datastore)  ←  polled directly by Laptop Agent (this folder)
 ```
 
-The cloud server now exists — see `../cloud-api` (Node.js, backed by a
-SupaBein project as the datastore, tested against that live project end
-to end). The phone app also exists — see `../phone-app`. See "Cloud
-server contract" below for the exact API `connection.js` calls; the agent
-doesn't care how the server is implemented as long as it matches that
-contract, but `../cloud-api` is the real one it's actually meant to talk to.
+There's no middle server anymore — both this agent and `../phone-app`
+talk straight to SupaBein's Data API (project 79) with no credential at
+all (anon access, scoped by SupaBein's own row policies to just the
+`devices`/`commands`/`settings` tables — see "Talks directly to
+SupaBein" below). An earlier version of this project ran a small Node
+server (`../cloud-api`) in between; it was removed once the agent's
+poll-timeout issues traced back to that server's free-hosting-tier cold
+starts, and direct access turned out to be simpler anyway.
 
 **Intended use:** on a device you own or are authorized to manage, with the
 person using it aware it's installed. The agent's name, tray icon, and
@@ -35,85 +37,104 @@ machine.
 - **Starts at login**: registers itself via Electron's login-item API on
   Windows/macOS, and via an XDG `~/.config/autostart/*.desktop` file on
   Linux (Electron's API doesn't cover most Linux desktops).
-- **Connects to a server**: polls your API over HTTPS on an interval
-  (default 10s) rather than holding a socket open — no persistent
-  connection required server-side, so this works on literally any HTTP
-  host: a serverless function, a small Express/Fastify app, whatever.
-- **Receives and applies commands**: `BLOCK` / `ALLOW`, from the server,
-  the tray menu, or the local dashboard — all three paths go through the
-  same `Controller`, so behavior and logging are identical regardless of
-  source.
-- **Quit is passphrase-gated**: prevents casually disabling the agent from
-  the tray. This is a light deterrent, not a security boundary — anyone
-  with admin/root on the machine can always stop it via the OS. The real
-  control point is meant to be the server + phone app.
+- **Talks to SupaBein directly**: polls SupaBein's Data API over HTTPS on
+  an interval (default 10s) — no server in between, no credential
+  embedded (see "Talks directly to SupaBein" below).
+- **Receives and applies commands**: `BLOCK` / `ALLOW`, from the phone app
+  (via SupaBein), the tray menu, or the local dashboard — all paths go
+  through the same `Controller`, so behavior and logging are identical
+  regardless of source.
+- **Quit and Allow are passphrase-gated**: prevents casually disabling
+  the agent or lifting a block from the tray/dashboard. Block itself
+  needs no passphrase — only quitting or un-blocking does. This is a
+  light deterrent, not a security boundary — anyone with admin/root on
+  the machine can always stop it via the OS. See "Shared passphrase"
+  below for how this passphrase also lives in the phone app.
 
-## Cloud server contract
+## Talks directly to SupaBein
 
-This is the exact API `src/connection.js` calls. Implement these 3
-endpoints (in whatever you're building) and the agent works against it
-unchanged. Two more (`GET /devices`, `POST /command`) aren't called by the
-agent at all — they're for your phone app / admin UI to drive the same
-data.
+`src/supabein.js` is the entire client: three tables in SupaBein project
+`79`, no server in between, no credential embedded in this app at all.
 
-All bodies are JSON. Every request carries `X-Api-Key`; use **two
-different keys** — one for the agent, one for admin/phone-app calls — so
-a leaked agent config can't be used to command other devices.
+```
+devices:
+  device_uuid      VARCHAR(36)   not null, unique
+  hostname         VARCHAR(255)  not null
+  platform         VARCHAR(32)   not null
+  os_release       VARCHAR(64)
+  username         VARCHAR(128)
+  internet_blocked BOOLEAN       not null, default false
+  last_seen        DATETIME
 
-**`POST /register`** — agent calls this once at startup. Upsert keyed on
-`device_uuid`; safe to call repeatedly.
-```
-Request:  {device_uuid, hostname, platform, osRelease, username}
-Response: {ok: true}
-```
+commands:
+  device_uuid  VARCHAR(36)  not null
+  command      VARCHAR(32)  not null        -- "BLOCK" | "ALLOW"
+  status       VARCHAR(32)  not null, default 'pending'  -- pending|delivered|acked|failed
+  acked_at     DATETIME
+  error        TEXT
 
-**`POST /heartbeat`** — agent calls this every `pollIntervalMs`. Update
-the device's `last_seen`/`internet_blocked`, and in the *same response*
-hand back at most one pending command — combining "status report" and
-"what should I do" into one round trip. Mark the command `delivered`
-(not yet `acked`) as soon as you hand it out, so a second heartbeat before
-the ack arrives doesn't redeliver it.
+settings:
+  setting_key  VARCHAR(64)   not null, unique   -- currently just "passphrase_hash"
+  value        VARCHAR(255)  not null
 ```
-Request:  {device_uuid, internet_blocked}
-Response: {ok: true, command: {id, command} | null}   // command: "BLOCK" | "ALLOW"
-```
-404 if `device_uuid` hasn't been registered yet.
+(Every SupaBein table also gets an auto `id` and `created_at` for free.)
 
-**`POST /ack`** — agent calls this right after attempting a delivered
-command. Scope the update to `device_uuid` too, so one device can never
-ack another's command id.
-```
-Request:  {device_uuid, command_id, ok, error?}
-Response: {ok: true}
-```
+The `anon` role (i.e. **no** `Authorization` header at all) was granted
+`SELECT`/`INSERT`/`UPDATE` on `devices` and `commands`, and
+`SELECT`/`UPDATE` only on `settings` (no anon `INSERT` — the one settings
+row is pre-seeded; clients can only change its value, not create new
+rows). `DELETE` is denied everywhere for `anon`. Every other table in
+this SupaBein project has zero policies, so this access can't reach
+anything beyond these three tables regardless — see SupaBein's own docs:
+an unpolicied table denies every operation to anyone but the project
+owner's token, by default.
 
-**`GET /devices`** *(for the phone app, not called by the agent)*
-```
-Response: {ok: true, devices: [{device_uuid, hostname, platform, username,
-                                 internet_blocked, online, last_seen,
-                                 pending_command, last_command_failed}, ...]}
-```
-"online" should mean "last_seen within a few multiples of the agent's
-poll interval" — computed server-side/DB-side against its own clock, not
-by mixing timezones between two systems. `pending_command` (`"BLOCK"` /
-`"ALLOW"` / `null`) and `last_command_failed` (`{command, error}` / `null`)
-let the phone app show an in-flight/failed state instead of silently
-looking like nothing happened while a command is still working its way to
-the device.
+Each poll (`Connection._tick()` in `src/connection.js`) does, directly
+against SupaBein:
+1. **register** (once, lazily, retried until it succeeds) — find-or-insert
+   this device's row in `devices` keyed on `device_uuid`.
+2. **heartbeat** — update that row's `internet_blocked`/`last_seen`.
+3. **sync passphrase** — read `settings` for `passphrase_hash`; if it
+   differs from the locally cached value, update the local cache (see
+   "Shared passphrase" below).
+4. **check for a command** — find the oldest `commands` row for this
+   device with `status = "pending"`; if found, mark it `delivered`, apply
+   it via `Controller`, then mark it `acked` or `failed`.
 
-**`POST /command`** *(for the phone app, not called by the agent)* —
-validate `command` against a whitelist (`BLOCK`/`ALLOW` only) and 404 on
-an unknown `device_uuid` before inserting.
-```
-Request:  {device_uuid, command}
-Response: {ok: true, id}
-```
+The phone app does the mirror image directly too: lists `devices` +
+`commands` to render status (including an in-flight `pending`/`delivered`
+state so the UI doesn't look like nothing happened while a command is
+still working its way to the device), and inserts into `commands` with
+`status: "pending"` to send `BLOCK`/`ALLOW`.
 
-`../cloud-api` implements exactly this contract (Node.js, backed by
-SupaBein) — see its README for the schema, deployment, and how it was
-tested against the real live project.
+**Security tradeoff, stated plainly**: because this is anon/no-credential
+access, anyone who discovers this SupaBein project's Data API URL (the
+project id and table names are visible in this public repo) can read the
+device list and insert/update rows in these three tables directly,
+bypassing both apps' UI entirely — there's no API-key gate at all
+anymore, unlike the earlier `cloud-api` design. This was a deliberate,
+explicit choice (see git history) in exchange for removing a server that
+had its own reliability problems (a free-hosting-tier cold-start delay
+was the actual root cause of earlier "still not connecting" reports) and
+for a much simpler two-component system. If that tradeoff stops being
+acceptable, the fix is real per-user authentication via SupaBein's
+`authenticated` role (login-backed, not anon) — not built, see "Next
+steps" below.
 
-## Blocking allow-lists the control server, so remote ALLOW keeps working
+## Shared passphrase
+
+The passphrase gating Quit and Allow (this app) and the phone app's login
+screen is the **same value**, stored as the `settings` row's
+`passphrase_hash` (SHA-256 hex) rather than duplicated as separate
+hardcoded constants in each app. The phone app has a "Change passcode"
+screen (gear icon, top right, once unlocked) that updates this row
+directly; this agent picks up the change on its next poll (step 3 above)
+and caches it locally in `config.json`'s `quitPassphraseHash` so
+passphrase checks stay instant and work offline using the last-synced
+value, rather than requiring a live SupaBein round trip every time someone
+types a passphrase into the tray/dashboard prompt.
+
+## Blocking allow-lists SupaBein, so remote ALLOW keeps working
 
 `BLOCK` doesn't just cut everything — `controller.js` reads a **hardcoded**
 allow-list from `config.json` (`serverAllowIps` + `serverAllowPort`, set
@@ -158,8 +179,8 @@ in) — nothing detects that automatically.
   succeeds rather than erroring out. In that fallback case, this section's
   guarantee doesn't hold and you're back to relying on the auto-revert
   timer below.
-- If the server's IP changes and `config.json` isn't updated to match,
-  the agent will silently keep allow-listing the *old*, no-longer-correct
+- If SupaBein's IP changes and `config.json` isn't updated to match, the
+  agent will silently keep allow-listing the *old*, no-longer-correct
   IP — same practical effect as the fallback above, just without a log
   warning, since nothing knows the hardcoded value has gone stale.
 - DNS itself (port 53, any destination) stays open throughout a block, as
@@ -179,31 +200,33 @@ network being up at all.
 
 ```
 src/
-  main.js          Electron entry point — wires everything together
-  service-main.js   Headless entry point for the Windows Service install (see below)
-  state.js          Shared in-memory state + change events
-  controller.js      Applies BLOCK/ALLOW, owns the auto-revert timer
-  connection.js       HTTP polling client to the cloud server
-  device.js            Stable device identity
-  config.js             Local settings (server base URL, API key, poll interval, quit passphrase, auto-revert minutes)
-  logger.js               Rotating file + console logger
-  autostart.js             Login-item registration (cross-platform, Electron build only)
-  tray.js                   Tray icon + menu
+  main.js               Electron entry point — wires everything together
+  service-main.js       Headless entry point for the Windows Service install (see below)
+  state.js               Shared in-memory state + change events
+  controller.js           Applies BLOCK/ALLOW, owns the auto-revert timer
+  connection.js            Polls SupaBein directly — register/heartbeat/passphrase-sync/command
+  supabein.js               Thin anon Data API client (list/findOne/insert/update)
+  time.js                    nowMysqlUtc() — UTC DATETIME formatting for last_seen etc.
+  device.js                   Stable device identity
+  config.js                    Local settings (poll interval, allow-list, cached passphrase hash, auto-revert minutes)
+  logger.js                     Rotating file + console logger
+  autostart.js                   Login-item registration (cross-platform, Electron build only)
+  tray.js                         Tray icon + menu
   network/
-    index.js                 Picks the right backend for process.platform
-    target.js                 DNS-resolves a URL to {ips, port} — used by scripts/resolve-server-ips.js, not at block-time
-    windows.js                  Default-deny firewall policy + allow rules for the configured serverAllowIps
-    macos.js                     pf ruleset: deny-all + pass rules for the configured target, elevated via sudo-prompt
-    linux.js                      iptables OUTPUT/INPUT chains with RETURN exceptions for the configured target
+    index.js                      Picks the right backend for process.platform
+    target.js                      DNS-resolves a URL to {ips, port} — used by scripts/resolve-server-ips.js, not at block-time
+    windows.js                     Default-deny firewall policy + allow rules for the configured serverAllowIps
+    macos.js                       pf ruleset: deny-all + pass rules for the configured target, elevated via sudo-prompt
+    linux.js                       iptables OUTPUT/INPUT chains with RETURN exceptions for the configured target
   ui/
-    dashboard.html/js/css       Status window (opened from the tray)
-    prompt.html/js/css           Passphrase prompt for Quit
-  preload.js                    contextBridge API exposed to renderers
+    dashboard.html/js/css          Status window (opened from the tray); Allow opens the passphrase prompt
+    prompt.html/js/css             Purpose-aware passphrase prompt, shared by Quit and Allow
+  preload.js                      contextBridge API exposed to renderers
 scripts/
-  generate-icons.js               Generates the tray/app PNG icons (no external assets)
-  resolve-server-ips.js            One-time setup: prints the serverAllowIps/serverAllowPort to paste into config.json
-  install-service.js               Installs the Windows Service (see below)
-  uninstall-service.js             Removes it
+  generate-icons.js              Generates the tray/app PNG icons (no external assets)
+  resolve-server-ips.js          One-time setup: prints the serverAllowIps/serverAllowPort to paste into config.json
+  install-service.js             Installs the Windows Service (see below)
+  uninstall-service.js           Removes it
 ```
 
 ## Tamper-resistant install for a child's account (Windows Service)
@@ -263,10 +286,9 @@ Task Manager or fakes a different name; see the intro above.
 3. It reads `config.json` from `%ProgramData%\Laptop Agent\config.json`
    (not the per-user `%APPDATA%` path the Electron build uses) — same
    hardcoded defaults apply (see `src/config.js`), so no manual setup is
-   needed for it to reach the live cloud API. If you do need to hand-edit
-   it (e.g. to point at a different server), do so **before** running
-   `service:install`, or as Administrator afterward — a standard account
-   won't be able to once the folder is locked down.
+   needed for it to reach SupaBein. If you do need to hand-edit it, do so
+   **before** running `service:install`, or as Administrator afterward —
+   a standard account won't be able to once the folder is locked down.
 
 To remove it later (also requires an elevated terminal):
 ```
@@ -301,7 +323,7 @@ want no trace left at all.
 Like the rest of this project's OS-level integrations, `service-main.js`'s
 core logic (`Config`, `loadOrCreateDevice`, `AgentState`, `Controller`,
 `Connection`) was verified headlessly here by direct invocation against
-the real production cloud API — same modules, same code path as the
+the real live SupaBein project — same modules, same code path as the
 Electron build, just without Electron wrapping them. `node-windows`'s
 actual service registration, the Session-0 no-UI behavior, and the
 `icacls` hardening were **not** run against a real Windows Service Control
@@ -317,27 +339,26 @@ npm install       # pulls electron, electron-builder, sudo-prompt
 npm start         # launches the tray app
 ```
 
-Point it at `../cloud-api` (or any server implementing the contract
-above): edit `config.json` (created on first run in the OS's per-app data
-directory) and set `serverBaseUrl` to its base URL and `apiKey` to match
-its `DEVICE_API_KEY`. Then run:
+No server URL/API key to configure — `src/supabein.js` already points at
+the live SupaBein project. If you ever deploy your own copy against a
+different SupaBein project, update `PROJECT_ID`/`BASE` there (and in
+`../phone-app/supabein.js` to match), then re-run:
 ```bash
-node scripts/resolve-server-ips.js https://your-api.example.com
+node scripts/resolve-server-ips.js https://supabein.dxinnovationhub.com
 ```
-and paste the printed `serverAllowIps`/`serverAllowPort` into the same
-`config.json`, so `BLOCK` can allow-list the server (see "Blocking
-allow-lists the control server" above). Re-run this if the server ever
-moves to a different host/IP.
+and paste the printed `serverAllowIps`/`serverAllowPort` into
+`config.json`, so `BLOCK` can allow-list SupaBein (see "Blocking
+allow-lists SupaBein" above). Re-run this if SupaBein's IP ever changes.
 
 First launch creates `config.json`, `device.json`, and a `logs/` folder in
 the OS's standard per-app data directory (e.g. `~/.config/laptop-agent` on
 Linux, `~/Library/Application Support/Laptop Agent` on macOS,
 `%APPDATA%\Laptop Agent` on Windows).
 
-Quit passphrase defaults to the value hardcoded in `src/config.js`
-(currently set for this deployment) — change it via
-`config.set("quitPassphraseHash", ...)` through `Config.setPassphrase()`,
-or hand-edit the hash in `config.json` using `sha256("your phrase")`.
+Quit/Allow passphrase defaults to the value hardcoded in `src/config.js`,
+but is really governed by SupaBein's shared `settings` row once this
+agent has synced at least once — see "Shared passphrase" above. Change it
+from the phone app's "Change passcode" screen, not locally.
 
 ### Platform notes
 
@@ -361,17 +382,20 @@ correctly, the dashboard UI renders and reflects state changes correctly
 (screenshotted via CDP), and the auto-revert timer fires and calls
 `allow()` correctly.
 
-The `connection.js` polling logic (register → heartbeat → apply command →
-ack, retry-on-failure, one-command-per-tick) was proven correct end-to-end
-against `../cloud-api` running for real, backed by the real live SupaBein
-project — not a stub, not a disposable copy. See `../cloud-api/README.md`
-for the full test account.
+The `connection.js` polling logic (register → heartbeat → passphrase sync
+→ apply command → ack, retry-on-failure, one-command-per-tick) was proven
+correct end-to-end against the real live SupaBein project directly — not
+a stub, not a mock: register/heartbeat confirmed via a real `Connection`
+instance (controller mocked, so no real firewall commands ran), the
+`settings` row's anon `SELECT`/`INSERT`/`UPDATE`/blocked-`DELETE`
+behavior confirmed with real HTTP calls, and `_syncPassphrase()` confirmed
+to actually correct a deliberately-stale local cache to match the live
+`settings` value. All test rows were cleaned up afterward.
 
 `network/target.js`'s DNS resolution (used by `scripts/resolve-server-ips.js`,
-not at block-time — see above) was run for real against the actual
-production hosts (`cloud-api` on Render, and separately SupaBein's own
-domain), correctly returning multiple IPs where a host has more than one
-A record and defaulting the port correctly for https/http/custom ports.
+not at block-time — see above) was run for real against SupaBein's actual
+production domain, correctly returning its current IP and defaulting the
+port correctly for https/http/custom ports.
 `controller.js`'s wiring was verified end-to-end with `network` mocked: a
 configured `serverAllowIps` produces the expected `{ips, port}` passed
 into `network.block()`, and an empty/missing one correctly falls back to
@@ -401,11 +425,12 @@ regain physical access in case something behaves unexpectedly.
 ## Next steps (not built yet)
 
 1. Periodic re-resolution of the allow-list while a block is active, to
-   handle the control server's IP rotating mid-block (see the residual
-   limitations above).
-2. Deploy `../cloud-api` somewhere it can stay running (see its README),
-   and `../phone-app` to any static host, then point this agent's
-   `config.json` at the deployed API.
+   handle SupaBein's IP rotating mid-block (see the residual limitations
+   above).
+2. Real per-user authentication (SupaBein's `authenticated`/login-backed
+   role) if the current anon/no-credential access ever needs to be locked
+   down further — see "Talks directly to SupaBein"'s security tradeoff
+   note above.
 3. Later: per-domain rules/categories, scheduling, and real activity
    monitoring (the current build has no traffic inspection — that needs a
    local proxy or OS-level DNS/connection logging, deliberately deferred

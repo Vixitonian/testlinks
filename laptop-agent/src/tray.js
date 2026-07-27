@@ -15,7 +15,7 @@ const ICONS = {
  * ("Laptop Agent") — this is meant to be known-present on the machine,
  * never disguised as something else.
  */
-function createTray({ state, controller, onOpenDashboard, onQuitRequest }) {
+function createTray({ state, controller, onOpenDashboard, onAllowRequest, onQuitRequest }) {
   const iconFor = (snap) => {
     if (snap.internetBlocked) return ICONS.blocked;
     if (snap.connectionStatus === "connected") return ICONS.connected;
@@ -45,9 +45,9 @@ function createTray({ state, controller, onOpenDashboard, onQuitRequest }) {
         click: () => controller.applyCommand("BLOCK", "tray")
       },
       {
-        label: "Allow Internet",
+        label: "Allow Internet (passphrase required)",
         enabled: snap.internetBlocked,
-        click: () => controller.applyCommand("ALLOW", "tray")
+        click: onAllowRequest
       },
       { type: "separator" },
       { label: "Open Dashboard", click: onOpenDashboard },

@@ -42,11 +42,10 @@ async function main() {
   await controller.init();
 
   const connection = new Connection({
-    baseUrl: config.get("serverBaseUrl"),
-    apiKey: config.get("apiKey"),
     device,
     state,
     controller,
+    config,
     logger,
     pollIntervalMs: config.get("pollIntervalMs")
   });

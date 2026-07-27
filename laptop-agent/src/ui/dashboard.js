@@ -46,10 +46,11 @@ el("blockBtn").addEventListener("click", async () => {
   if (!res.ok) el("errorMsg").textContent = res.error || "Failed to block internet";
 });
 
-el("allowBtn").addEventListener("click", async () => {
-  el("allowBtn").disabled = true;
-  const res = await agent.allow();
-  if (!res.ok) el("errorMsg").textContent = res.error || "Failed to allow internet";
+el("allowBtn").addEventListener("click", () => {
+  // Passphrase-gated — opens the same prompt the tray menu uses rather
+  // than applying ALLOW directly. The dashboard re-renders from the
+  // next state:changed event once it's actually applied.
+  agent.requestAllow();
 });
 
 agent.onStateChange(render);

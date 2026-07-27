@@ -69,3 +69,10 @@ footer { text-align: center; padding: 14px; }
   background: var(--bg); color: var(--ink); font-size: 0.95rem;
 }
 .input:focus { outline: 2px solid var(--green); outline-offset: 1px; }
+
+.icon-btn {
+  background: transparent; border: 1px solid var(--line); border-radius: 10px;
+  color: var(--ink); font-size: 1rem; width: 36px; height: 36px; cursor: pointer; flex: none;
+}
+#settingsForm .btn { margin-top: 0; }
+#settingsScreen .btn + .btn { margin-top: 8px; }
