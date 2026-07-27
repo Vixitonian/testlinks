@@ -180,13 +180,14 @@ network being up at all.
 ```
 src/
   main.js          Electron entry point — wires everything together
+  service-main.js   Headless entry point for the Windows Service install (see below)
   state.js          Shared in-memory state + change events
   controller.js      Applies BLOCK/ALLOW, owns the auto-revert timer
   connection.js       HTTP polling client to the cloud server
   device.js            Stable device identity
   config.js             Local settings (server base URL, API key, poll interval, quit passphrase, auto-revert minutes)
   logger.js               Rotating file + console logger
-  autostart.js             Login-item registration (cross-platform)
+  autostart.js             Login-item registration (cross-platform, Electron build only)
   tray.js                   Tray icon + menu
   network/
     index.js                 Picks the right backend for process.platform
@@ -201,7 +202,113 @@ src/
 scripts/
   generate-icons.js               Generates the tray/app PNG icons (no external assets)
   resolve-server-ips.js            One-time setup: prints the serverAllowIps/serverAllowPort to paste into config.json
+  install-service.js               Installs the Windows Service (see below)
+  uninstall-service.js             Removes it
 ```
+
+## Tamper-resistant install for a child's account (Windows Service)
+
+The default build (`npm start` / the NSIS installer) is a **per-user**
+Electron app: it starts at login for whichever account launches it, shows
+a tray icon, and can be quit from that tray menu (passphrase-gated, but a
+standard user account can still find the process and end it via Task
+Manager, since it runs under their own login session). That's fine for a
+parent's own machine; it's not the right shape for a child's account where
+the goal is that they can't casually stop or remove it.
+
+For that case, install `src/service-main.js` as a real **Windows
+Service** instead:
+
+- Runs as **SYSTEM**, not as the logged-in user — starts at boot, before
+  anyone logs in, and keeps running across every login session on the
+  machine, not just one account's.
+- **No tray icon and no dashboard window** — not because either was
+  hidden, but because Windows Services run in Session 0, isolated from
+  any interactive desktop, and structurally cannot show UI at all. There
+  is nothing to toggle here; this is just what a service is.
+- **Cannot be stopped or uninstalled by a standard (non-admin) account** —
+  the Services Control Manager itself enforces this (`services.msc`,
+  `sc stop`, `sc delete` all require admin credentials for a
+  SYSTEM-owned service). This is the actual tamper-resistance, not a
+  passphrase — a standard account has no path to it at all, the same way
+  it can't stop any other Windows system service.
+- `install-service.js` also locks down the `ProgramData\Laptop Agent`
+  config/log folder (via `icacls`) so a standard account gets Access
+  Denied trying to open or hand-edit `config.json`/`device.json` — see
+  "What this does and doesn't hide" below for exactly what that does and
+  doesn't cover.
+
+**What stays honest and visible, unchanged from the rest of this
+project:** the service is named **"Laptop Agent"** — that's exactly what
+appears in `services.msc`, Task Manager's *Services* tab, `sc query`, and
+`tasklist`. Nothing about the service name, executable, or folder is
+disguised or hidden from anyone who looks (including the child, if they
+know to check Services — they just can't do anything about it from a
+standard account). This project won't build a version that hides from
+Task Manager or fakes a different name; see the intro above.
+
+### Installing it
+
+1. On the target Windows machine, from an **elevated** (Run as
+   Administrator) terminal, in this folder:
+   ```
+   npm install
+   npm run service:install
+   ```
+   This pulls in `node-windows` (an optional, Windows-only dependency —
+   harmless if `npm install` can't build it on macOS/Linux, since nothing
+   else here depends on it) and registers + starts the service.
+2. Confirm it's running: open `services.msc` and look for "Laptop Agent"
+   (status "Running", startup type "Automatic").
+3. It reads `config.json` from `%ProgramData%\Laptop Agent\config.json`
+   (not the per-user `%APPDATA%` path the Electron build uses) — same
+   hardcoded defaults apply (see `src/config.js`), so no manual setup is
+   needed for it to reach the live cloud API. If you do need to hand-edit
+   it (e.g. to point at a different server), do so **before** running
+   `service:install`, or as Administrator afterward — a standard account
+   won't be able to once the folder is locked down.
+
+To remove it later (also requires an elevated terminal):
+```
+npm run service:uninstall
+```
+This unregisters the service but deliberately leaves the ProgramData
+folder in place (config/logs); delete it manually as Administrator if you
+want no trace left at all.
+
+### What this does and doesn't cover
+
+- **Covers**: casual removal (Task Manager "End task", uninstalling via
+  Settings/Programs, deleting the tray-app shortcut, editing
+  `config.json` to point it at nothing) — none of these work from a
+  standard child account against a real Windows Service.
+- **Doesn't cover**: an account with local admin rights (or physical
+  access plus a way to boot into another OS / Safe Mode with a different
+  admin account) can always stop or remove any Windows service, including
+  this one — that's true of literally every piece of endpoint software on
+  Windows, not a gap specific to this project. The earlier clarifying
+  answer that the kids' accounts are standard (non-admin) is what makes
+  this protection meaningful here.
+- **Doesn't hide anything** — deliberately. The service name, the
+  ProgramData folder's existence (just not its contents), and the
+  process's presence in Task Manager are all exactly as discoverable as
+  any other legitimate background service. If a design goal is ever "the
+  child should not be able to find out this exists," that's a different
+  and explicitly declined kind of build — see the intro above.
+
+### Not tested on a real Windows machine
+
+Like the rest of this project's OS-level integrations, `service-main.js`'s
+core logic (`Config`, `loadOrCreateDevice`, `AgentState`, `Controller`,
+`Connection`) was verified headlessly here by direct invocation against
+the real production cloud API — same modules, same code path as the
+Electron build, just without Electron wrapping them. `node-windows`'s
+actual service registration, the Session-0 no-UI behavior, and the
+`icacls` hardening were **not** run against a real Windows Service Control
+Manager from this environment (no Windows machine available here) —
+verify the install steps above on an actual machine before relying on
+this for a child's account, the same caveat as this README's firewall
+commands above.
 
 ## Running it
 

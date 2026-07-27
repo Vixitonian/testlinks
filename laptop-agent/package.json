@@ -7,10 +7,13 @@
   "scripts": {
     "start": "electron .",
     "postinstall": "node scripts/generate-icons.js",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "service:install": "node scripts/install-service.js",
+    "service:uninstall": "node scripts/uninstall-service.js"
   },
   "optionalDependencies": {
-    "sudo-prompt": "^9.2.1"
+    "sudo-prompt": "^9.2.1",
+    "node-windows": "^1.0.0-beta.8"
   },
   "devDependencies": {
     "electron": "^31.3.1",
