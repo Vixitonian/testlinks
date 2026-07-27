@@ -1,0 +1,44 @@
+{
+  "name": "laptop-agent",
+  "version": "0.1.0",
+  "description": "Visible background agent that identifies a laptop, connects to a control server, and applies allow/block internet commands.",
+  "main": "src/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "postinstall": "node scripts/generate-icons.js",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "ws": "^8.21.1"
+  },
+  "optionalDependencies": {
+    "sudo-prompt": "^9.2.1"
+  },
+  "devDependencies": {
+    "electron": "^31.3.1",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.example.laptopagent",
+    "productName": "Laptop Agent",
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "requestedExecutionLevel": "requireAdministrator",
+      "icon": "assets/icon.png"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png"
+    }
+  }
+}

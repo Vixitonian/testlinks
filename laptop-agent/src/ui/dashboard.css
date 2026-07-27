@@ -1,0 +1,46 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: #12161b;
+  color: #e6e9ee;
+  padding: 18px 20px 12px;
+}
+header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+h1 { font-size: 1.05rem; margin: 0; }
+.muted { color: #8a94a3; }
+.small { font-size: 0.8rem; line-height: 1.5; }
+.dot {
+  width: 14px; height: 14px; border-radius: 50%; flex: none;
+  background: #8a8a8a; box-shadow: 0 0 8px currentColor;
+}
+.dot.connected { background: #1a8a4f; color: #1a8a4f; }
+.dot.blocked { background: #c9382b; color: #c9382b; }
+.dot.disconnected { background: #8a8a8a; color: #8a8a8a; }
+
+.card {
+  background: #1a1f27;
+  border: 1px solid #262d38;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; }
+.pill {
+  font-size: 0.78rem; font-weight: 600; padding: 3px 9px; border-radius: 99px;
+  background: #262d38; color: #c7cdd6;
+}
+.pill.ok { background: #113420; color: #4ade80; }
+.pill.bad { background: #3a1512; color: #f87171; }
+.pill.pending { background: #3a2e10; color: #fbbf24; }
+
+.actions { display: flex; gap: 10px; margin-top: 10px; }
+.btn {
+  flex: 1; padding: 10px 12px; border: none; border-radius: 9px;
+  font-size: 0.9rem; font-weight: 700; cursor: pointer;
+}
+.btn.danger { background: #c9382b; color: #fff; }
+.btn.primary { background: #1a8a4f; color: #fff; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.error { color: #f87171; font-size: 0.82rem; min-height: 1.1em; margin: 8px 0 0; }
+footer { text-align: center; margin-top: 4px; }
