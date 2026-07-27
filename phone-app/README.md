@@ -7,10 +7,14 @@ build step, just static files. Works on any phone's browser and can be
 
 ## What it does
 
-- **No setup step**: the API base URL and admin key are hardcoded in
-  `app.js` for this specific deployment — open the page and the device
-  list is already live. See "Security note on the admin key" below for
-  what that tradeoff actually means.
+- **Passcode lock screen**: on every launch, the app shows a passcode
+  prompt before anything else — same passcode as the laptop agent's quit
+  passphrase. See "Security note on the passcode lock screen" below for
+  exactly what this does and doesn't protect against.
+- **No setup step beyond the passcode**: the API base URL and admin key
+  are hardcoded in `app.js` for this specific deployment — once unlocked,
+  the device list is already live. See "Security note on the admin key"
+  below for what that tradeoff actually means.
 - **Empty state**: if nothing's registered yet, shows "No devices yet"
   instead of an error or a blank screen.
 - **Device list**: hostname, platform, username, an online/offline dot
@@ -82,6 +86,24 @@ If that trade-off stops being acceptable (e.g. this URL becomes widely
 known, or more than one household shares the deployment), the fix is a
 real per-user login on top of `cloud-api`, not a client-side secret —
 not built, see "Not built yet" below.
+
+## Security note on the passcode lock screen
+
+`PASSCODE_HASH` in `app.js` is a SHA-256 hash of the passcode, checked
+entirely client-side before the login screen hides and `refresh()` starts
+polling. This is the same class of protection as the laptop agent's quit
+passphrase — **a deterrent, not a security boundary**: the check happens
+in code anyone can view-source, so a determined user with browser dev
+tools could call `bootMainScreen()` directly and skip it entirely. What it
+actually stops is casual access — someone picking up an unlocked phone
+and opening the app, or a kid finding the home-screen icon. The real
+access control is still `ADMIN_KEY` above, which the passcode screen
+doesn't change at all.
+
+The lock is checked via `sessionStorage`, so it's required again every
+time the app is opened fresh (most standalone/home-screen launches start
+a new session) rather than remembered permanently — closer to a "PIN to
+open the app" than a one-time login.
 
 ## What's verified
 

@@ -61,3 +61,11 @@ footer { text-align: center; padding: 14px; }
 .fail-note { color: var(--red); font-size: 0.8rem; margin: -4px 0 12px; }
 
 .empty-state { text-align: center; padding: 60px 20px; }
+
+.login-title { margin: 0 0 4px; font-size: 1.1rem; }
+#loginForm { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.input {
+  width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink); font-size: 0.95rem;
+}
+.input:focus { outline: 2px solid var(--green); outline-offset: 1px; }

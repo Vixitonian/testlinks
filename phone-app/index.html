@@ -23,9 +23,21 @@
   </header>
 
   <main>
+    <section id="loginScreen" class="hide">
+      <div class="card">
+        <h2 class="login-title">Enter passcode</h2>
+        <p class="muted small">Required to view or control family devices.</p>
+        <form id="loginForm">
+          <input type="password" id="passcodeInput" autocomplete="current-password" placeholder="Passcode" class="input" />
+          <button type="submit" class="btn primary">Unlock</button>
+        </form>
+        <p class="fail-note hide" id="loginError">Incorrect passcode.</p>
+      </div>
+    </section>
+
     <div class="banner error hide" id="errorBanner"></div>
 
-    <section id="mainScreen">
+    <section id="mainScreen" class="hide">
       <div id="deviceList" class="device-list"></div>
       <div id="emptyState" class="empty-state hide">
         <p>No devices yet.</p>

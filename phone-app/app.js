@@ -10,6 +10,16 @@
 const API_BASE = "https://device-control-cloud-api.onrender.com";
 const ADMIN_KEY = "189cafb0dd0ed74dd5709fe915ed7049e9395dccb018a30eac8ce7c0c7033427";
 
+// SHA-256 of the app passcode — same passcode as the laptop agent's quit
+// passphrase. This is a client-side lock screen only (same class of
+// deterrent as the tray app's quit passphrase, not a real security
+// boundary): the hash lives in this public file and anyone with dev tools
+// could skip straight to calling refresh()/onToggle() themselves. It's
+// meant to stop someone picking up an unlocked phone and casually opening
+// the app, not to withstand a determined attacker — ADMIN_KEY above is
+// still the actual credential guarding the API itself.
+const PASSCODE_HASH = "a9d2e534f6f208c4e2895a88f4440accea7dd45d314b79ea5fab615f51aed1f0";
+
 const POLL_MS = 5000;
 
 const $ = (id) => document.getElementById(id);
@@ -126,10 +136,46 @@ function showError(msg) {
 }
 function hideError() { $("errorBanner").classList.add("hide"); }
 
-// boot straight into the device list — empty state handles "nothing
-// registered yet" on its own, no setup step needed.
-refresh();
-setInterval(refresh, POLL_MS);
+async function sha256Hex(str) {
+  const bytes = new TextEncoder().encode(str);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Passcode gate: required every time the app is opened (session-scoped,
+// not remembered across launches — see PASSCODE_HASH note above). Once
+// unlocked, boots straight into the device list — empty state handles
+// "nothing registered yet" on its own, no setup step beyond the passcode.
+function bootMainScreen() {
+  $("loginScreen").classList.add("hide");
+  $("mainScreen").classList.remove("hide");
+  refresh();
+  setInterval(refresh, POLL_MS);
+}
+
+function initLoginGate() {
+  if (sessionStorage.getItem("unlocked") === "1") {
+    bootMainScreen();
+    return;
+  }
+  $("loginScreen").classList.remove("hide");
+  $("loginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = $("passcodeInput");
+    const hash = await sha256Hex(input.value);
+    if (hash === PASSCODE_HASH) {
+      sessionStorage.setItem("unlocked", "1");
+      $("loginError").classList.add("hide");
+      bootMainScreen();
+    } else {
+      $("loginError").classList.remove("hide");
+      input.value = "";
+      input.focus();
+    }
+  });
+}
+
+initLoginGate();
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("service-worker.js").catch(() => {});
