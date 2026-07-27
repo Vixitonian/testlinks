@@ -1,6 +1,7 @@
 "use strict";
 const supabein = require("./supabein");
 const { nowMysqlUtc } = require("./time");
+const { AGENT_VERSION } = require("./version");
 
 /**
  * Talks directly to SupaBein's Data API (see supabein.js) by polling on
@@ -9,7 +10,10 @@ const { nowMysqlUtc } = require("./time");
  * Every tick:
  *   1. register (once, lazily, retried until it succeeds) — upsert this
  *      device's row in `devices` keyed on device_uuid
- *   2. heartbeat — update `devices` with current status
+ *   2. heartbeat — update `devices` with current status, including
+ *      agent_version (src/version.js) so the phone app can show which
+ *      build is actually running on each device — useful for confirming
+ *      a self-update (see updater.js) actually landed
  *   3. sync the shared quit/unblock passphrase from `settings` — lets the
  *      phone app change it centrally (see README's "Shared passphrase"
  *      section) and have it take effect here within one poll interval
@@ -87,6 +91,7 @@ class Connection {
       platform: this.device.platform,
       os_release: this.device.osRelease || "",
       username: this.device.username || "",
+      agent_version: AGENT_VERSION,
       last_seen: nowMysqlUtc()
     };
     const existing = await supabein.findOne("devices", { device_uuid: this.device.id });
@@ -121,6 +126,7 @@ class Connection {
     }
     await supabein.update("devices", this._deviceRowId, {
       internet_blocked: this.state.internetBlocked,
+      agent_version: AGENT_VERSION,
       last_seen: nowMysqlUtc()
     });
   }

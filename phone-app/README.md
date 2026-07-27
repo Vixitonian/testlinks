@@ -21,9 +21,14 @@ SupaBein" below.
   to SupaBein" below.
 - **Empty state**: if nothing's registered yet, shows "No devices yet"
   instead of an error or a blank screen.
-- **Device list**: hostname, platform, username, an online/offline dot
-  (computed client-side from the last-heartbeat threshold), and a status
-  pill.
+- **Device list**: hostname, platform, username, agent version (e.g.
+  "v1.0.0" — the laptop agent's `src/version.js`, reported on every
+  register/heartbeat; useful for confirming a self-update actually landed
+  on a given device, see `../laptop-agent/README.md`'s "Self-updating
+  service" section), an online/offline dot (computed client-side from the
+  last-heartbeat threshold), and a status pill. Version is omitted from
+  the card if a device hasn't reported one yet (older agent builds, from
+  before this field existed).
 - **Block / Allow**: one button per device that flips to whichever action
   applies. While a command is in flight (sent but not yet confirmed by
   the device), the pill shows an amber "Blocking…"/"Allowing…" state and

@@ -56,7 +56,7 @@ function cardHtml(d, i) {
       <span class="dot ${d.online ? "online" : "offline"}"></span>
       <div class="card-title">
         <div class="hostname">${esc(d.hostname)}</div>
-        <div class="muted small">${esc(d.platform)}${d.username ? " · " + esc(d.username) : ""}</div>
+        <div class="muted small">${esc(d.platform)}${d.username ? " · " + esc(d.username) : ""}${d.agent_version ? " · v" + esc(d.agent_version) : ""}</div>
       </div>
       <span class="pill ${pillClass}">${pillText}</span>
     </div>
@@ -124,6 +124,7 @@ async function refresh() {
         hostname: d.hostname,
         platform: d.platform,
         username: d.username,
+        agent_version: d.agent_version || null,
         internet_blocked: !!d.internet_blocked,
         last_seen: d.last_seen,
         online: lastSeenMs !== null && now - lastSeenMs <= ONLINE_THRESHOLD_MS,

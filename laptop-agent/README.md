@@ -64,6 +64,7 @@ devices:
   os_release       VARCHAR(64)
   username         VARCHAR(128)
   internet_blocked BOOLEAN       not null, default false
+  agent_version    VARCHAR(32)   -- src/version.js's AGENT_VERSION, reported every register/heartbeat; null on devices that haven't reported one yet
   last_seen        DATETIME
 
 commands:
@@ -76,15 +77,23 @@ commands:
 settings:
   setting_key  VARCHAR(64)   not null, unique   -- currently just "passphrase_hash"
   value        VARCHAR(255)  not null
+
+agent_releases:
+  version   VARCHAR(32)   not null, unique
+  manifest  TEXT          not null   -- JSON array of {path, content (base64)}
+  sha256    VARCHAR(64)   not null   -- of the manifest string, verified by updater.js
+  notes     TEXT
 ```
 (Every SupaBein table also gets an auto `id` and `created_at` for free.)
 
 The `anon` role (i.e. **no** `Authorization` header at all) was granted
-`SELECT`/`INSERT`/`UPDATE` on `devices` and `commands`, and
-`SELECT`/`UPDATE` only on `settings` (no anon `INSERT` — the one settings
-row is pre-seeded; clients can only change its value, not create new
-rows). `DELETE` is denied everywhere for `anon`. Every other table in
-this SupaBein project has zero policies, so this access can't reach
+`SELECT`/`INSERT`/`UPDATE` on `devices` and `commands`, `SELECT`/`UPDATE`
+only on `settings` (no anon `INSERT` — the one settings row is
+pre-seeded; clients can only change its value, not create new rows), and
+`SELECT` only on `agent_releases` (see "Self-updating service" below for
+why that one's read-only). `DELETE` is denied everywhere for `anon`.
+Every other table in this SupaBein project has zero policies, so this
+access can't reach
 anything beyond these three tables regardless — see SupaBein's own docs:
 an unpolicied table denies every operation to anyone but the project
 owner's token, by default.
