@@ -9,9 +9,6 @@
     "postinstall": "node scripts/generate-icons.js",
     "dist": "electron-builder"
   },
-  "dependencies": {
-    "ws": "^8.21.1"
-  },
   "optionalDependencies": {
     "sudo-prompt": "^9.2.1"
   },

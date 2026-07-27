@@ -1,101 +1,134 @@
 "use strict";
-const WebSocket = require("ws");
-
-const MIN_BACKOFF_MS = 2000;
-const MAX_BACKOFF_MS = 60_000;
+const http = require("http");
+const https = require("https");
+const { URL } = require("url");
 
 /**
- * Keeps a persistent WebSocket to the cloud server so commands arrive in
- * near-real-time rather than on a polling interval. There is no server
- * to talk to yet in this build, so this will simply retry forever with
- * backoff and report "disconnected" — the agent is fully usable via the
- * tray menu in the meantime.
+ * Talks to the PHP cloud-server (see ../cloud-server) by polling on an
+ * interval rather than holding a socket open — this is what works on
+ * ordinary shared/cPanel hosting, which generally can't run a persistent
+ * daemon or accept raw WebSocket connections. Every tick:
+ *   1. register (once, lazily, retried until it succeeds)
+ *   2. heartbeat — reports current status, receives at most one pending
+ *      command in the same response
+ *   3. if a command came back: apply it via Controller, then ack it
  *
- * Wire protocol (for whenever the server exists):
- *   agent -> server  {"type":"hello","device":{...}}
- *   agent -> server  {"type":"status","internetBlocked":bool,"at":iso}
- *   server -> agent  {"type":"command","command":"BLOCK"|"ALLOW","id":"..."}
- *   agent -> server  {"type":"ack","id":"...","ok":bool,"error":"..."}
+ * Endpoint contract (see cloud-server/*.php):
+ *   POST {base}/register.php   {device_uuid, hostname, platform, ...}   -> {ok}
+ *   POST {base}/heartbeat.php  {device_uuid, internet_blocked}          -> {ok, command: {id, command} | null}
+ *   POST {base}/ack.php        {device_uuid, command_id, ok, error?}    -> {ok}
+ * All requests carry an X-Api-Key header matching the server's
+ * DEVICE_API_KEY.
  */
 class Connection {
-  constructor({ url, device, state, controller, logger }) {
-    this.url = url;
+  constructor({ baseUrl, apiKey, device, state, controller, logger, pollIntervalMs }) {
+    this.baseUrl = String(baseUrl).replace(/\/+$/, "");
+    this.apiKey = apiKey;
     this.device = device;
     this.state = state;
     this.controller = controller;
     this.logger = logger;
-    this.ws = null;
-    this.backoff = MIN_BACKOFF_MS;
-    this._closedByUs = false;
+    this.pollIntervalMs = pollIntervalMs || 10000;
+    this._timer = null;
+    this._stopped = true;
+    this._registered = false;
   }
 
   start() {
-    this._closedByUs = false;
-    this._connect();
+    this._stopped = false;
+    this._tick(); // fire immediately, then reschedule after each tick completes
   }
 
   stop() {
-    this._closedByUs = true;
-    if (this.ws) this.ws.close();
+    this._stopped = true;
+    if (this._timer) clearTimeout(this._timer);
   }
 
-  _connect() {
+  async _tick() {
+    if (this._stopped) return;
     this.state.patch({ connectionStatus: "connecting" });
-    this.logger.info(`Connecting to server: ${this.url}`);
 
-    let ws;
     try {
-      ws = new WebSocket(this.url);
+      if (!this._registered) {
+        await this._post("/register.php", {
+          device_uuid: this.device.id,
+          hostname: this.device.hostname,
+          platform: this.device.platform,
+          osRelease: this.device.osRelease,
+          username: this.device.username
+        });
+        this._registered = true;
+      }
+
+      const res = await this._post("/heartbeat.php", {
+        device_uuid: this.device.id,
+        internet_blocked: this.state.internetBlocked
+      });
+      this.state.patch({ connectionStatus: "connected", lastError: null });
+
+      if (res.command) {
+        this.logger.info(`Server has a command waiting: ${res.command.command} (id ${res.command.id})`);
+        const result = await this.controller.applyCommand(res.command.command, "server");
+        await this._post("/ack.php", {
+          device_uuid: this.device.id,
+          command_id: res.command.id,
+          ok: result.ok,
+          error: result.error || null
+        });
+      }
     } catch (e) {
-      this.logger.warn(`Invalid server URL, will retry: ${e.message}`);
-      return this._scheduleReconnect();
-    }
-    this.ws = ws;
-
-    ws.on("open", () => {
-      this.backoff = MIN_BACKOFF_MS;
-      this.state.patch({ connectionStatus: "connected" });
-      this.logger.info("Connected to server");
-      this._send({ type: "hello", device: this.device });
-      this._send({ type: "status", internetBlocked: this.state.internetBlocked, at: new Date().toISOString() });
-    });
-
-    ws.on("message", async (raw) => {
-      let msg;
-      try {
-        msg = JSON.parse(raw.toString());
-      } catch (_) {
-        return this.logger.warn("Ignoring non-JSON message from server");
-      }
-      if (msg.type === "command" && msg.command) {
-        const result = await this.controller.applyCommand(msg.command, "server");
-        this._send({ type: "ack", id: msg.id, ...result });
-        this._send({ type: "status", internetBlocked: this.state.internetBlocked, at: new Date().toISOString() });
-      }
-    });
-
-    ws.on("close", () => {
+      this.logger.warn(`Server poll failed: ${e.message}`);
       this.state.patch({ connectionStatus: "disconnected" });
-      if (!this._closedByUs) this._scheduleReconnect();
-    });
-
-    ws.on("error", (e) => {
-      this.logger.warn(`Server connection error: ${e.message}`);
-      // "close" fires right after "error" for ws, which drives the retry.
-    });
-  }
-
-  _send(obj) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(obj));
+      // A failed register this tick just gets retried next tick.
+    } finally {
+      if (!this._stopped) {
+        this._timer = setTimeout(() => this._tick(), this.pollIntervalMs);
+      }
     }
   }
 
-  _scheduleReconnect() {
-    if (this._closedByUs) return;
-    const delay = this.backoff;
-    this.backoff = Math.min(this.backoff * 2, MAX_BACKOFF_MS);
-    setTimeout(() => this._connect(), delay);
+  _post(path, body) {
+    return new Promise((resolve, reject) => {
+      let url;
+      try {
+        url = new URL(this.baseUrl + path);
+      } catch (e) {
+        return reject(new Error(`Invalid serverBaseUrl: ${e.message}`));
+      }
+      const payload = JSON.stringify(body);
+      const lib = url.protocol === "https:" ? https : http;
+
+      const req = lib.request(
+        url,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(payload),
+            "X-Api-Key": this.apiKey
+          },
+          timeout: 15000
+        },
+        (resp) => {
+          let data = "";
+          resp.on("data", (chunk) => { data += chunk; });
+          resp.on("end", () => {
+            if (resp.statusCode < 200 || resp.statusCode >= 300) {
+              return reject(new Error(`HTTP ${resp.statusCode} from ${path}: ${data.slice(0, 200)}`));
+            }
+            try {
+              resolve(JSON.parse(data));
+            } catch (e) {
+              reject(new Error(`Invalid JSON from ${path}: ${e.message}`));
+            }
+          });
+        }
+      );
+      req.on("error", reject);
+      req.on("timeout", () => req.destroy(new Error(`Request to ${path} timed out`)));
+      req.write(payload);
+      req.end();
+    });
   }
 }
 

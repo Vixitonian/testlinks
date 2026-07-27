@@ -41,11 +41,13 @@ app.whenReady().then(async () => {
   await controller.init();
 
   connection = new Connection({
-    url: config.get("serverUrl"),
+    baseUrl: config.get("serverBaseUrl"),
+    apiKey: config.get("apiKey"),
     device,
     state,
     controller,
-    logger
+    logger,
+    pollIntervalMs: config.get("pollIntervalMs")
   });
   connection.start();
 

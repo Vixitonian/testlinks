@@ -1,0 +1,12 @@
+# schema.sql and config.example.php should never be served as-is (they
+# reveal structure/placeholders; config.php would additionally reveal real
+# credentials if this rule were ever missing).
+<FilesMatch "\.(sql)$">
+  Require all denied
+</FilesMatch>
+<Files "config.php">
+  Require all denied
+</Files>
+<Files "config.example.php">
+  Require all denied
+</Files>
