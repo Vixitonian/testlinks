@@ -38,6 +38,7 @@ class Connection {
     this._registered = false;
     this._deviceRowId = null;
     this._lastAppliedSiteBlocks = null;
+    this._lastReportedSiteBlockError = undefined; // undefined = not yet reported this run
   }
 
   start() {
@@ -125,6 +126,7 @@ class Connection {
   }
 
   async _syncSiteBlocks() {
+    let errorToReport = null;
     try {
       const rows = await supabein.list("site_blocks", { device_uuid: this.device.id });
       const domains = [...new Set(rows.map((r) => r.domain))].sort();
@@ -134,6 +136,24 @@ class Connection {
       this._lastAppliedSiteBlocks = key;
     } catch (e) {
       this.logger.warn(`Site block sync failed: ${e.message}`);
+      errorToReport = e.message;
+    }
+    // Reported to `devices.site_block_error` so the phone app can show a
+    // failure instead of silently looking like blocking worked — without
+    // this, a permission error (e.g. Windows Defender's Controlled Folder
+    // Access denying the hosts-file write) was only ever visible in this
+    // machine's local log file, never surfaced anywhere the phone app
+    // could show it. Only writes when the value actually changed, so a
+    // persisting or persisting-absent error doesn't spam an update every
+    // tick.
+    if (errorToReport !== this._lastReportedSiteBlockError && this._deviceRowId != null) {
+      try {
+        await supabein.update("devices", this._deviceRowId, { site_block_error: errorToReport });
+        this._lastReportedSiteBlockError = errorToReport;
+      } catch (_) {
+        // Best-effort — if this write itself fails, the outer tick's
+        // catch/retry will get another chance next cycle regardless.
+      }
     }
   }
 

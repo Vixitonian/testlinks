@@ -60,10 +60,15 @@ function siteBlocksSection(d, i) {
     <button type="button" data-quickblock="${esc(s.domain)}" data-device-index="${i}" ${d.blocked_sites.includes(s.domain) ? "disabled" : ""}>${esc(s.label)}</button>
   `).join("");
 
+  const errorNote = d.site_block_error
+    ? `<div class="fail-note">Blocking failed on this device: ${esc(d.site_block_error)}</div>`
+    : "";
+
   return `
   <details class="subsection" data-section-key="${esc(key)}" ${open}>
-    <summary>Blocked sites (${d.blocked_sites.length})</summary>
+    <summary>Blocked sites (${d.blocked_sites.length})${d.site_block_error ? " ⚠" : ""}</summary>
     <div class="subsection-body">
+      ${errorNote}
       <div class="chip-list">${chips || '<span class="empty-note">None blocked.</span>'}</div>
       <div class="quick-add">${quickAdd}</div>
       <form class="add-site-form" data-addsite-index="${i}">
@@ -286,6 +291,7 @@ async function refresh() {
           ? { command: lastCmd.command, error: lastCmd.error }
           : null,
         blocked_sites: (sitesByDevice.get(d.device_uuid) || []).sort(),
+        site_block_error: d.site_block_error || null,
         history: historyByDevice.get(d.device_uuid) || []
       };
     });

@@ -29,7 +29,15 @@ machine.
 - **Identifies the laptop**: generates a stable UUID on first run (stored
   in the OS user-data folder), paired with hostname/platform/OS
   version/username. Survives restarts; a fresh id is only created if the
-  user-data folder is wiped.
+  user-data folder is wiped. **If the same physical machine ever shows up
+  as two separate cards in the phone app** (same hostname, different
+  status/last-seen), that's this: `device.json` got regenerated, almost
+  always because two service installs ended up pointing at the same
+  `%ProgramData%\Laptop Agent` — e.g. installing the turnkey EXE without
+  first cleanly uninstalling a previous manual (`npm run service:install`)
+  install. Check `services.msc` for more than one "Laptop Agent" entry and
+  remove the extra; the stale device row itself can just be deleted
+  directly in SupaBein (or ask — it's a one-line fix from this side).
 - **Runs in the background**: a tray icon (green = connected & allowed,
   red = blocked, gray = disconnected) is the primary UI. No window opens
   on launch; clicking the tray icon (or launching the app again) opens a
@@ -65,6 +73,7 @@ devices:
   username         VARCHAR(128)
   internet_blocked BOOLEAN       not null, default false
   agent_version    VARCHAR(32)   -- src/version.js's AGENT_VERSION, reported every register/heartbeat; null on devices that haven't reported one yet
+  site_block_error TEXT          -- last site-blocking failure on this device (e.g. hosts file write denied), null when last attempt succeeded — see "Custom site blocking" below
   last_seen        DATETIME
 
 commands:
@@ -179,12 +188,32 @@ add a block by inserting a row, remove it by deleting the row.
 
 **How it's applied**: `src/sitecontrol.js` rewrites a clearly-marked
 section of the OS hosts file (`# BEGIN/END LAPTOP-AGENT SITE BLOCKS`),
-redirecting each blocked domain and its `www.` variant to `0.0.0.0`,
-leaving the rest of the file untouched — always a full replace of that
-one section, never an incremental edit, so it can't drift from what's
-actually configured. `connection.js` checks `site_blocks` every poll
-tick (cheap — cached, only reapplies when the list actually changed) and
-diffs against what's currently applied.
+redirecting each blocked domain and its `www.` variant to **both**
+`0.0.0.0` (IPv4) and `::1` (IPv6) — an IPv4-only redirect would leave a
+dual-stack site (most major ones) reachable over IPv6, sailing straight
+past the block; this was a real gap in the first version, found via a
+user report that blocking "wasn't working." Leaves the rest of the file
+untouched — always a full replace of that one section, never an
+incremental edit, so it can't drift from what's actually configured.
+After every write, also runs `ipconfig /flushdns` (Windows) — a hosts
+file edit alone doesn't evict already-cached DNS answers, so a domain
+resolved before the block was added would keep working until that cache
+entry naturally expired otherwise. `connection.js` checks `site_blocks`
+every poll tick (cheap — cached, only reapplies when the list actually
+changed) and diffs against what's currently applied.
+
+**Failures are reported, not just logged locally**: if the hosts-file
+write itself fails (e.g. Windows Defender's Controlled Folder Access
+treating an unrecognized process editing the hosts file as
+ransomware-like behavior and blocking it — a real, fairly common cause on
+a default-configured Windows 11 machine, and the leading suspect if
+blocking still isn't taking effect after the IPv6/DNS-flush fix above),
+that failure is written to `devices.site_block_error` and shown directly
+in the phone app (a "Blocking failed on this device: ..." note, plus a ⚠
+on the collapsed section) — before this, a permission error was only
+ever visible in this machine's local log file, so blocking could
+silently do nothing while the phone app showed no indication anything
+was wrong.
 
 **Domain values are strictly validated before ever touching the hosts
 file** (`SAFE_DOMAIN` regex in `sitecontrol.js`): `site_blocks` is
