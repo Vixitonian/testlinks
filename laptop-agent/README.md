@@ -53,8 +53,8 @@ machine.
 
 ## Talks directly to SupaBein
 
-`src/supabein.js` is the entire client: three tables in SupaBein project
-`79`, no server in between, no credential embedded in this app at all.
+`src/supabein.js` is the entire client: SupaBein project `79`, no server
+in between, no credential embedded in this app at all.
 
 ```
 devices:
@@ -69,7 +69,7 @@ devices:
 
 commands:
   device_uuid  VARCHAR(36)  not null
-  command      VARCHAR(32)  not null        -- "BLOCK" | "ALLOW"
+  command      VARCHAR(32)  not null        -- "BLOCK" | "ALLOW" | "SHUTDOWN"
   status       VARCHAR(32)  not null, default 'pending'  -- pending|delivered|acked|failed
   acked_at     DATETIME
   error        TEXT
@@ -83,20 +83,32 @@ agent_releases:
   manifest  TEXT          not null   -- JSON array of {path, content (base64)}
   sha256    VARCHAR(64)   not null   -- of the manifest string, verified by updater.js
   notes     TEXT
+
+site_blocks:
+  device_uuid  VARCHAR(36)   not null   -- one row per (device, domain); no composite unique key support in SupaBein, so app code de-dupes
+  domain       VARCHAR(255)  not null
+
+browsing_history:
+  device_uuid    VARCHAR(36)   not null
+  domain         VARCHAR(255)  not null
+  visit_count    INT           not null
+  last_visit_at  DATETIME
 ```
 (Every SupaBein table also gets an auto `id` and `created_at` for free.)
 
-The `anon` role (i.e. **no** `Authorization` header at all) was granted
-`SELECT`/`INSERT`/`UPDATE` on `devices` and `commands`, `SELECT`/`UPDATE`
+The `anon` role (i.e. **no** `Authorization` header at all) was granted:
+`SELECT`/`INSERT`/`UPDATE` on `devices` and `commands`; `SELECT`/`UPDATE`
 only on `settings` (no anon `INSERT` — the one settings row is
-pre-seeded; clients can only change its value, not create new rows), and
+pre-seeded; clients can only change its value, not create new rows);
 `SELECT` only on `agent_releases` (see "Self-updating service" below for
-why that one's read-only). `DELETE` is denied everywhere for `anon`.
-Every other table in this SupaBein project has zero policies, so this
-access can't reach
-anything beyond these three tables regardless — see SupaBein's own docs:
-an unpolicied table denies every operation to anyone but the project
-owner's token, by default.
+why that one's read-only); `SELECT`/`INSERT`/`DELETE` on `site_blocks`
+(no `UPDATE` — a block is either present or not, so add/remove is
+insert/delete, never an edit); and `SELECT`/`INSERT`/`UPDATE` on
+`browsing_history` (no `DELETE`). `DELETE` is denied everywhere else for
+`anon`. Every other table in this SupaBein project has zero policies, so
+this access can't reach anything beyond these tables regardless — see
+SupaBein's own docs: an unpolicied table denies every operation to anyone
+but the project owner's token, by default.
 
 Each poll (`Connection._tick()` in `src/connection.js`) does, directly
 against SupaBein:
@@ -142,6 +154,111 @@ and caches it locally in `config.json`'s `quitPassphraseHash` so
 passphrase checks stay instant and work offline using the last-synced
 value, rather than requiring a live SupaBein round trip every time someone
 types a passphrase into the tray/dashboard prompt.
+
+## Shutdown
+
+`SHUTDOWN` is a third command alongside `BLOCK`/`ALLOW` (`src/system.js`,
+routed in `controller.js`). Sent from the phone app the same way as
+Block/Allow — insert a `commands` row, the agent picks it up next poll.
+
+**Never silent, on purpose**: `system.shutdown()` always gives a 30-second
+grace period with an on-screen warning ("Laptop Agent: this device is
+shutting down.", via `shutdown /t 30 /c "..."` on Windows) rather than
+cutting power instantly — matches this project's rule against covert
+action from the very first line of this README: the person at the
+keyboard sees it coming, every time.
+
+## Custom site blocking
+
+Beyond the all-or-nothing `BLOCK`/`ALLOW`, individual domains can be
+blocked while the rest of the internet stays up — the phone app has
+quick-add buttons for common social sites (Instagram, TikTok, Snapchat,
+YouTube, Facebook, X, Discord, Reddit) plus a field for any custom
+domain. Backed by the `site_blocks` table: one row per (device, domain);
+add a block by inserting a row, remove it by deleting the row.
+
+**How it's applied**: `src/sitecontrol.js` rewrites a clearly-marked
+section of the OS hosts file (`# BEGIN/END LAPTOP-AGENT SITE BLOCKS`),
+redirecting each blocked domain and its `www.` variant to `0.0.0.0`,
+leaving the rest of the file untouched — always a full replace of that
+one section, never an incremental edit, so it can't drift from what's
+actually configured. `connection.js` checks `site_blocks` every poll
+tick (cheap — cached, only reapplies when the list actually changed) and
+diffs against what's currently applied.
+
+**Domain values are strictly validated before ever touching the hosts
+file** (`SAFE_DOMAIN` regex in `sitecontrol.js`): `site_blocks` is
+anon-`INSERT`-able, so a `domain` value is untrusted input by
+construction. Without validation, a value containing e.g. an embedded
+newline could inject an unrelated extra hosts-file line (redirecting some
+other, unrelated domain) instead of just blocking the one it claims to —
+tested directly against this exact attack (a domain value containing
+`\n0.0.0.0 <some other host>`) and confirmed rejected before any write.
+
+**Known gaps, stated plainly**: this blocks the domain, not the service —
+some sites are reachable across many CDN/edge domains beyond the obvious
+one, so a determined workaround (a different domain, a VPN, a proxy) can
+get around a hosts-file block; this is the same category of limitation
+every consumer parental-control tool that isn't doing deep packet
+inspection has. `www.<domain>` is covered explicitly but other
+subdomains (e.g. `api.instagram.com`) are not, unless added as their own
+entry. Windows-only for now — `sitecontrol.js`'s `hostsFilePath()` covers
+macOS/Linux paths too, but this hasn't been exercised on those platforms.
+
+## Browsing history
+
+Domain-level (not full URLs — see why below) browsing history, reported
+every `historyReportIntervalMs` (default 15 minutes, plus once ~45s after
+boot — see `service-main.js`). `src/browserhistory.js` reads Chrome/Edge's
+own History SQLite file directly, across every local user profile it can
+find (`C:\Users\*\AppData\Local\{Google\Chrome,Microsoft\Edge}\User
+Data\{Default,Profile N}\History`) — a SYSTEM-level service isn't tied to
+one logged-in user, so it can't just check `process.env`.
+
+**Why domain-level, not full URLs**: a full URL can carry search terms,
+session tokens, and other things that leak more than "what site" —
+`instagram.com`, visited 14 times, last visit 6 minutes ago, says
+everything this feature needs to say without also capturing whatever
+someone searched for or a token that could log into their account if it
+leaked. This is the same level of detail mainstream tools like Microsoft
+Family Safety report.
+
+**Uses `node:sqlite`, built into Node itself** (stable since Node 22.5) —
+no external npm dependency, matching this whole project's minimal-runtime-deps
+design. It's still marked experimental by Node's own docs; the only thing
+asked of it here is a single read-only `SELECT`, about as low-risk a use
+of an experimental API as there is.
+
+**Reads a copy, not the live file**: Chrome holds its own lock on the
+live History file while running, so `browserhistory.js` copies it to a
+temp path first, which sidesteps that lock far more often than opening it
+directly would. Best-effort: if Chrome is mid-write at the exact moment
+of the copy, that cycle just misses the update and picks it up on the
+next scheduled check.
+
+**A real bug caught during testing, worth calling out**: Chrome's
+`last_visit_time` column (microseconds since 1601-01-01) exceeds
+`Number.MAX_SAFE_INTEGER` for any modern date. `node:sqlite` throws
+rather than silently truncating when that happens — caught by testing
+against a synthetic database built with Chrome's actual schema and
+realistic values, not discovered by inspection. Fixed via
+`stmt.setReadBigInts(true)` plus converting to `Number` only after the
+epoch-offset arithmetic shrinks it back into a normal range.
+
+**Verified**: `readHistoryFile()` tested against a from-scratch SQLite
+database matching Chrome's real schema (`urls` table) with realistic
+timestamp values — confirmed `www.`/non-`www.` variants of the same
+domain merge into one entry with summed visit counts, malformed URLs are
+skipped rather than guessed at, and the large-integer handling above.
+`reportBrowsingHistory()`'s upsert logic verified end-to-end against the
+real live SupaBein project: first report inserts, second report for the
+same domain updates the existing row rather than duplicating it. **Not
+verified**: reading an actual, real Chrome/Edge History file — there's no
+Chrome installed in this environment to test against; only the schema
+and query logic were verified, via the synthetic database above. Also
+unverified: whether `node:sqlite`'s behavior matches exactly on Windows
+vs. the Linux Node build used here — same no-Windows-machine caveat as
+everywhere else in this README.
 
 ## Blocking allow-lists SupaBein, so remote ALLOW keeps working
 
@@ -217,8 +334,12 @@ src/
   updater.js                Self-update: checks agent_releases, verifies + applies (service build only, see below)
   version.js                  Single source of truth for the running version
   supabein.js                  Thin anon Data API client (list/findOne/insert/update)
-  time.js                       nowMysqlUtc() — UTC DATETIME formatting for last_seen etc.
-  device.js                      Stable device identity
+  time.js                       nowMysqlUtc() / toMysqlUtc() — UTC DATETIME formatting
+  system.js                      shutdown() — cross-platform, never instant/silent
+  sitecontrol.js                  Custom site blocking via the OS hosts file
+  browserhistory.js                Reads Chrome/Edge History via node:sqlite
+  historyreporter.js                Upserts browserhistory.js's output into browsing_history
+  device.js                          Stable device identity
   config.js                    Local settings (poll interval, allow-list, cached passphrase hash, auto-revert minutes)
   logger.js                     Rotating file + console logger
   autostart.js                   Login-item registration (cross-platform, Electron build only)
@@ -607,7 +728,26 @@ regain physical access in case something behaves unexpectedly.
    role) if the current anon/no-credential access ever needs to be locked
    down further — see "Talks directly to SupaBein"'s security tradeoff
    note above.
-3. Later: per-domain rules/categories, scheduling, and real activity
-   monitoring (the current build has no traffic inspection — that needs a
-   local proxy or OS-level DNS/connection logging, deliberately deferred
-   per the project's own MVP phasing).
+3. **Active window / foreground app reporting — requested, not built
+   yet, for a real architectural reason.** A Windows Service runs in
+   Session 0, isolated from any interactive desktop by design — it has no
+   visibility into which window has focus in the logged-in user's
+   session; `GetForegroundWindow()` called from Session 0 doesn't see the
+   user's desktop at all, the same hard OS boundary that already ruled
+   out a tray icon or dashboard for this service (see "Tamper-resistant
+   install" above). This is architecturally different from browsing
+   history above, which works fine from SYSTEM because it's just reading
+   a file, not querying desktop state. The fix is a small **separate
+   per-user helper** — a lightweight script registered as a Scheduled
+   Task that runs *in* the logged-in user's session (e.g. triggered "at
+   log on"), polls the foreground window title + owning process name via
+   a `user32.dll` call (no native npm module needed — invoked through a
+   short PowerShell snippet, the same pattern `network/windows.js`
+   already uses for `netsh`), and reports it either directly to SupaBein
+   or through the main service. Not built in this pass — flagging it
+   plainly rather than shipping something that would silently fail in
+   Session 0.
+4. Per-domain categories/scheduling beyond a flat per-site block list,
+   and traffic inspection beyond DNS/hosts-level blocking (would need a
+   local proxy or OS-level connection logging) — deliberately deferred
+   per the project's own MVP phasing.

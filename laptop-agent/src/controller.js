@@ -1,5 +1,6 @@
 "use strict";
 const network = require("./network");
+const system = require("./system");
 
 /**
  * Single choke point for actually changing the network state. Both the
@@ -40,6 +41,11 @@ class Controller {
         await network.allow();
         this._clearAutoRevert();
         this.state.patch({ internetBlocked: false, lastError: null, autoRevertAt: null });
+      } else if (normalized === "SHUTDOWN") {
+        // Never silent: system.shutdown() always gives a grace period with
+        // an on-screen warning (Windows) rather than cutting power instantly.
+        await system.shutdown();
+        this.state.patch({ lastError: null });
       } else {
         throw new Error(`Unknown command: ${command}`);
       }

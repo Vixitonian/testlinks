@@ -69,6 +69,10 @@ cp "$ROOT/src/service-main.js" \
    "$ROOT/src/time.js" \
    "$ROOT/src/version.js" \
    "$ROOT/src/updater.js" \
+   "$ROOT/src/system.js" \
+   "$ROOT/src/sitecontrol.js" \
+   "$ROOT/src/browserhistory.js" \
+   "$ROOT/src/historyreporter.js" \
    "$STAGE/src/"
 cp "$ROOT/src/network/index.js" \
    "$ROOT/src/network/target.js" \

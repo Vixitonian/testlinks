@@ -9,6 +9,7 @@ const { AgentState } = require("./state");
 const { Controller } = require("./controller");
 const { Connection } = require("./connection");
 const { checkForUpdate } = require("./updater");
+const { reportBrowsingHistory } = require("./historyreporter");
 const { AGENT_VERSION } = require("./version");
 
 /**
@@ -64,6 +65,12 @@ async function main() {
   const updateIntervalMs = Number(config.get("updateCheckIntervalMs")) || 60 * 60 * 1000;
   setTimeout(() => checkForUpdate(logger), 30_000);
   setInterval(() => checkForUpdate(logger), updateIntervalMs);
+
+  // Periodically report browser history (domain-level — see
+  // browserhistory.js and README's "Browsing history" section).
+  const historyIntervalMs = Number(config.get("historyReportIntervalMs")) || 15 * 60 * 1000;
+  setTimeout(() => reportBrowsingHistory(device, logger), 45_000);
+  setInterval(() => reportBrowsingHistory(device, logger), historyIntervalMs);
 
   logger.info("Laptop Agent service ready");
 

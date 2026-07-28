@@ -3,12 +3,14 @@
 /**
  * Thin browser client for SupaBein's Data API, called directly (no
  * cloud-api middle server — see README's "Talks directly to SupaBein"
- * section). No Authorization header: `devices`, `commands`, and
- * `settings` were granted anon SELECT/INSERT/UPDATE (no DELETE, and
- * `settings` has no anon INSERT either) specifically so this app and the
- * laptop agent can both read/write them with zero embedded credential.
- * Every other table in this SupaBein project has no policies at all, so
- * anon access here can't reach anything beyond these three tables.
+ * section). No Authorization header: `devices`, `commands`,
+ * `site_blocks`, `browsing_history`, and `settings` were each granted
+ * only the anon operations this app and the laptop agent actually need
+ * (see ../laptop-agent/README.md's "Talks directly to SupaBein" section
+ * for the exact policy per table) — remove() below will 403 on any table
+ * where anon DELETE wasn't explicitly granted, same as any other denied
+ * operation would. Every other table in this SupaBein project has no
+ * policies at all, so anon access here can't reach anything beyond these.
  */
 const SUPABEIN_PROJECT_ID = 79;
 const SUPABEIN_BASE = "https://supabein.dxinnovationhub.com/api/v1";
@@ -57,5 +59,8 @@ const supabein = {
   },
   update(table, id, patch) {
     return supabeinRequest("PATCH", `/${table}/${id}`, patch);
+  },
+  remove(table, id) {
+    return supabeinRequest("DELETE", `/${table}/${id}`);
   }
 };

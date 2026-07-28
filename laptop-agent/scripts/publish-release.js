@@ -40,6 +40,10 @@ const FILES = [
   "connection.js",
   "supabein.js",
   "time.js",
+  "system.js",
+  "sitecontrol.js",
+  "browserhistory.js",
+  "historyreporter.js",
   "network/index.js",
   "network/target.js",
   "network/windows.js"

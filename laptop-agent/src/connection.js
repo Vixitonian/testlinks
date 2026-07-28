@@ -1,5 +1,6 @@
 "use strict";
 const supabein = require("./supabein");
+const sitecontrol = require("./sitecontrol");
 const { nowMysqlUtc } = require("./time");
 const { AGENT_VERSION } = require("./version");
 
@@ -17,7 +18,11 @@ const { AGENT_VERSION } = require("./version");
  *   3. sync the shared quit/unblock passphrase from `settings` — lets the
  *      phone app change it centrally (see README's "Shared passphrase"
  *      section) and have it take effect here within one poll interval
- *   4. check `commands` for a pending row for this device; if found, mark
+ *   4. sync the desired custom site blocklist from `site_blocks` and
+ *      apply it via the OS hosts file (see sitecontrol.js and README's
+ *      "Custom site blocking" section) — failure here never aborts the
+ *      rest of the tick, it's an auxiliary feature, not core connectivity
+ *   5. check `commands` for a pending row for this device; if found, mark
  *      it delivered, apply it via Controller, then mark it acked/failed
  */
 class Connection {
@@ -32,6 +37,7 @@ class Connection {
     this._stopped = true;
     this._registered = false;
     this._deviceRowId = null;
+    this._lastAppliedSiteBlocks = null;
   }
 
   start() {
@@ -58,6 +64,7 @@ class Connection {
       this.state.patch({ connectionStatus: "connected", lastError: null });
 
       await this._syncPassphrase();
+      await this._syncSiteBlocks();
 
       const pending = await supabein.findOne(
         "commands",
@@ -114,6 +121,19 @@ class Connection {
     if (row && row.value && row.value !== this.config.get("quitPassphraseHash")) {
       this.config.set("quitPassphraseHash", row.value);
       this.logger.info("Quit/unblock passphrase updated from SupaBein");
+    }
+  }
+
+  async _syncSiteBlocks() {
+    try {
+      const rows = await supabein.list("site_blocks", { device_uuid: this.device.id });
+      const domains = [...new Set(rows.map((r) => r.domain))].sort();
+      const key = JSON.stringify(domains);
+      if (key === this._lastAppliedSiteBlocks) return;
+      sitecontrol.applyBlockedSites(domains, this.logger);
+      this._lastAppliedSiteBlocks = key;
+    } catch (e) {
+      this.logger.warn(`Site block sync failed: ${e.message}`);
     }
   }
 

@@ -8,6 +8,17 @@
 const POLL_MS = 5000;
 const ONLINE_THRESHOLD_MS = 30000;
 
+const QUICK_ADD_SITES = [
+  { label: "Instagram", domain: "instagram.com" },
+  { label: "TikTok", domain: "tiktok.com" },
+  { label: "Snapchat", domain: "snapchat.com" },
+  { label: "YouTube", domain: "youtube.com" },
+  { label: "Facebook", domain: "facebook.com" },
+  { label: "X / Twitter", domain: "x.com" },
+  { label: "Discord", domain: "discord.com" },
+  { label: "Reddit", domain: "reddit.com" }
+];
+
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -34,6 +45,57 @@ function relativeTime(mysqlUtc) {
 
 let currentDevices = [];
 const busyDevices = new Set();
+// <details> open/closed survives across the 5s poll re-render (which
+// otherwise blows away all DOM state) by tracking it here instead of
+// relying on the DOM's own state.
+const expandedSections = new Set(); // keys like "<device_uuid>:sites"
+
+function siteBlocksSection(d, i) {
+  const key = `${d.device_uuid}:sites`;
+  const open = expandedSections.has(key) ? "open" : "";
+  const chips = d.blocked_sites.map((domain) => `
+    <span class="chip">${esc(domain)}<button type="button" data-unblock="${esc(domain)}" data-device-index="${i}" title="Unblock">×</button></span>
+  `).join("");
+  const quickAdd = QUICK_ADD_SITES.map((s) => `
+    <button type="button" data-quickblock="${esc(s.domain)}" data-device-index="${i}" ${d.blocked_sites.includes(s.domain) ? "disabled" : ""}>${esc(s.label)}</button>
+  `).join("");
+
+  return `
+  <details class="subsection" data-section-key="${esc(key)}" ${open}>
+    <summary>Blocked sites (${d.blocked_sites.length})</summary>
+    <div class="subsection-body">
+      <div class="chip-list">${chips || '<span class="empty-note">None blocked.</span>'}</div>
+      <div class="quick-add">${quickAdd}</div>
+      <form class="add-site-form" data-addsite-index="${i}">
+        <input type="text" placeholder="custom-site.com" class="input" autocapitalize="off" autocorrect="off" />
+        <button type="submit" class="btn primary small">Block</button>
+      </form>
+    </div>
+  </details>`;
+}
+
+function historySection(d) {
+  const key = `${d.device_uuid}:history`;
+  const open = expandedSections.has(key) ? "open" : "";
+  const rows = d.history
+    .slice()
+    .sort((a, b) => (b.last_visit_at || "").localeCompare(a.last_visit_at || ""))
+    .slice(0, 20)
+    .map((h) => `
+      <div class="history-row">
+        <span class="history-domain">${esc(h.domain)}</span>
+        <span class="history-meta">${h.visit_count}× · ${relativeTime(h.last_visit_at)}</span>
+      </div>
+    `).join("");
+
+  return `
+  <details class="subsection" data-section-key="${esc(key)}" ${open}>
+    <summary>Browsing history (${d.history.length})</summary>
+    <div class="subsection-body">
+      ${rows ? `<div class="history-list">${rows}</div>` : '<p class="empty-note">No history reported yet.</p>'}
+    </div>
+  </details>`;
+}
 
 function cardHtml(d, i) {
   const blocked = d.internet_blocked;
@@ -67,6 +129,11 @@ function cardHtml(d, i) {
     <button class="btn ${blocked ? "primary" : "danger"}" data-index="${i}" ${busy ? "disabled" : ""}>
       ${busy ? "Working…" : (blocked ? "Allow Internet" : "Block Internet")}
     </button>
+    <div class="action-row">
+      <button type="button" class="btn secondary small" data-shutdown-index="${i}">Shut down</button>
+    </div>
+    ${siteBlocksSection(d, i)}
+    ${historySection(d)}
   </div>`;
 }
 
@@ -81,9 +148,48 @@ function render(devices) {
   }
   empty.classList.add("hide");
   list.innerHTML = devices.map(cardHtml).join("");
+
   list.querySelectorAll("button[data-index]").forEach((btn) => {
     btn.addEventListener("click", () => onToggle(currentDevices[Number(btn.dataset.index)]));
   });
+  list.querySelectorAll("button[data-shutdown-index]").forEach((btn) => {
+    btn.addEventListener("click", () => onShutdown(currentDevices[Number(btn.dataset.shutdownIndex)]));
+  });
+  list.querySelectorAll("button[data-unblock]").forEach((btn) => {
+    btn.addEventListener("click", () => onRemoveSiteBlock(currentDevices[Number(btn.dataset.deviceIndex)], btn.dataset.unblock));
+  });
+  list.querySelectorAll("button[data-quickblock]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.disabled) return;
+      onAddSiteBlock(currentDevices[Number(btn.dataset.deviceIndex)], btn.dataset.quickblock);
+    });
+  });
+  list.querySelectorAll("form[data-addsite-index]").forEach((form) => {
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const input = form.querySelector("input");
+      const domain = normalizeDomain(input.value);
+      if (!domain) return;
+      onAddSiteBlock(currentDevices[Number(form.dataset.addsiteIndex)], domain);
+    });
+  });
+  list.querySelectorAll("details[data-section-key]").forEach((el) => {
+    el.addEventListener("toggle", () => {
+      if (el.open) expandedSections.add(el.dataset.sectionKey);
+      else expandedSections.delete(el.dataset.sectionKey);
+    });
+  });
+}
+
+/** Strips a leading protocol/path/www so "https://www.site.com/x" and
+ *  "site.com" both normalize to the same bare domain before it's ever
+ *  sent anywhere — the agent's own SAFE_DOMAIN check is the real guard,
+ *  this is just to stop the obvious case of storing junk from a pasted URL. */
+function normalizeDomain(raw) {
+  let v = String(raw || "").trim().toLowerCase();
+  if (!v) return null;
+  v = v.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
+  return v || null;
 }
 
 async function onToggle(d) {
@@ -101,18 +207,65 @@ async function onToggle(d) {
   }
 }
 
+async function onShutdown(d) {
+  if (!confirm(`Shut down "${d.hostname}" now? The device will get a short warning before it powers off.`)) return;
+  try {
+    await supabein.insert("commands", { device_uuid: d.device_uuid, command: "SHUTDOWN", status: "pending" });
+    hideError();
+    await refresh();
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+async function onAddSiteBlock(d, domain) {
+  try {
+    await supabein.insert("site_blocks", { device_uuid: d.device_uuid, domain });
+    hideError();
+    await refresh();
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+async function onRemoveSiteBlock(d, domain) {
+  try {
+    const rows = await supabein.list("site_blocks", { device_uuid: d.device_uuid, domain });
+    for (const row of rows) {
+      await supabein.remove("site_blocks", row.id);
+    }
+    hideError();
+    await refresh();
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
 const IN_FLIGHT_STATUSES = new Set(["pending", "delivered"]);
 
 async function refresh() {
   try {
-    const [devices, commands] = await Promise.all([
+    const [devices, commands, siteBlocks, history] = await Promise.all([
       supabein.list("devices", {}, { order: "last_seen.desc", limit: 200 }),
-      supabein.list("commands", {}, { order: "id.desc", limit: 200 })
+      supabein.list("commands", {}, { order: "id.desc", limit: 200 }),
+      supabein.list("site_blocks", {}, { limit: 1000 }),
+      supabein.list("browsing_history", {}, { order: "last_visit_at.desc", limit: 1000 })
     ]);
 
     const latestByDevice = new Map();
     for (const c of commands) {
       if (!latestByDevice.has(c.device_uuid)) latestByDevice.set(c.device_uuid, c);
+    }
+    const sitesByDevice = new Map();
+    for (const row of siteBlocks) {
+      if (!sitesByDevice.has(row.device_uuid)) sitesByDevice.set(row.device_uuid, []);
+      const list = sitesByDevice.get(row.device_uuid);
+      if (!list.includes(row.domain)) list.push(row.domain);
+    }
+    const historyByDevice = new Map();
+    for (const row of history) {
+      if (!historyByDevice.has(row.device_uuid)) historyByDevice.set(row.device_uuid, []);
+      historyByDevice.get(row.device_uuid).push(row);
     }
 
     const now = Date.now();
@@ -131,7 +284,9 @@ async function refresh() {
         pending_command: lastCmd && IN_FLIGHT_STATUSES.has(lastCmd.status) ? lastCmd.command : null,
         last_command_failed: lastCmd && lastCmd.status === "failed"
           ? { command: lastCmd.command, error: lastCmd.error }
-          : null
+          : null,
+        blocked_sites: (sitesByDevice.get(d.device_uuid) || []).sort(),
+        history: historyByDevice.get(d.device_uuid) || []
       };
     });
 

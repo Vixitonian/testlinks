@@ -7,7 +7,13 @@
  * underlying DB's configured timezone.
  */
 function nowMysqlUtc() {
-  return new Date().toISOString().slice(0, 19).replace("T", " ");
+  return toMysqlUtc(new Date());
 }
 
-module.exports = { nowMysqlUtc };
+/** Same format as nowMysqlUtc(), for an arbitrary Date instead of "now" —
+ *  used to report a browser history entry's actual last-visit time. */
+function toMysqlUtc(date) {
+  return date.toISOString().slice(0, 19).replace("T", " ");
+}
+
+module.exports = { nowMysqlUtc, toMysqlUtc };

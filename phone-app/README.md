@@ -35,6 +35,21 @@ SupaBein" below.
   the button disables — this isn't optimistic UI, it's SupaBein's own
   `commands.status` field, so it can't lie about something having worked
   before the laptop actually confirms it.
+- **Shut down**: a button per device that inserts a `SHUTDOWN` command
+  the same way Block/Allow do. Asks for confirmation first (the shutdown
+  itself is never silent on the laptop side either — see
+  `../laptop-agent/README.md`'s "Shutdown" section).
+- **Blocked sites**: expandable section per device — quick-add buttons
+  for common social sites (Instagram, TikTok, Snapchat, YouTube,
+  Facebook, X, Discord, Reddit) plus a field for any custom domain,
+  chips with a "×" to unblock. Backed by the `site_blocks` table; see
+  `../laptop-agent/README.md`'s "Custom site blocking" section for how
+  it's actually enforced (hosts-file based) and its known gaps.
+- **Browsing history**: expandable section per device, domain + visit
+  count + last-visit time, newest first, capped at 20 shown. Domain-level
+  only, not full URLs — see `../laptop-agent/README.md`'s "Browsing
+  history" section for why. Says "No history reported yet" until the
+  laptop agent's first report cycle (up to ~15 minutes after it starts).
 - **Change passcode**: gear icon, top right, once unlocked — updates the
   shared passcode everywhere (see "Shared passcode" below).
 - **Auto-refreshes** every 5 seconds. No push notifications (would need a
@@ -105,21 +120,26 @@ deployment to point at a different SupaBein project.
 
 `supabein.js` is the entire client: no server in between, no credential
 embedded in this app at all. It calls SupaBein's Data API with **no**
-`Authorization` header (anon access), against three tables in project
-`79` — `devices`, `commands`, `settings` — each scoped by SupaBein's own
-row policies to exactly what this app and `../laptop-agent` need
-(`SELECT`/`INSERT`/`UPDATE` on `devices`/`commands`, `SELECT`/`UPDATE`
-only on `settings`; `DELETE` denied everywhere for anon). See
+`Authorization` header (anon access), against six tables in project `79`
+— `devices`, `commands`, `settings`, `agent_releases`, `site_blocks`,
+`browsing_history` — each scoped by SupaBein's own row policies to
+exactly what this app and `../laptop-agent` need. See
 `../laptop-agent/README.md`'s "Talks directly to SupaBein" section for
-the full schema and the security tradeoff this implies (worth reading —
-in short: this access has no credential gate at all beyond knowing the
-project id and table names, which are visible in this public repo).
+the full schema and per-table policy, and the security tradeoff this
+implies (worth reading — in short: this access has no credential gate at
+all beyond knowing the project id and table names, which are visible in
+this public repo).
 
-`refresh()` lists `devices` + `commands`, joins them client-side (latest
-command per `device_uuid`) to compute `online`/`pending_command`/
-`last_command_failed` — the same logic the old `cloud-api` server used to
-do, just run here instead. `onToggle()` inserts a `commands` row with
-`status: "pending"` to send `BLOCK`/`ALLOW`.
+`refresh()` lists `devices` + `commands` + `site_blocks` +
+`browsing_history` in parallel, joins them client-side (latest command
+per `device_uuid` for status; site_blocks/history grouped per device) to
+compute everything each card shows — the same logic the old `cloud-api`
+server used to do for devices/commands, just run here instead, plus the
+newer tables. `onToggle()`/`onShutdown()` insert a `commands` row with
+`status: "pending"` to send `BLOCK`/`ALLOW`/`SHUTDOWN`.
+`onAddSiteBlock()`/`onRemoveSiteBlock()` insert/delete `site_blocks` rows
+directly (`supabein.remove()` — the one place this app needs a DELETE,
+added alongside the other three verbs already in `supabein.js`).
 
 ## Shared passcode
 
@@ -161,12 +181,15 @@ keeps it unlocked across a reload within the same session.
 
 **The actual SupaBein-backed logic** — the login hash check, the
 `devices`+`commands` join that computes `online`/`pending_command`/
-`last_command_failed`, and the change-passcode update+revert round
-trip — was verified with a Node script making the exact same HTTP calls
+`last_command_failed`, the change-passcode update+revert round trip, and
+(added later) site-block insert/list/delete and the `SHUTDOWN` command
+insert — was verified with Node scripts making the exact same HTTP calls
 `supabein.js`/`app.js` make (same URLs, same anon/no-credential headers,
 same request bodies), run directly against the real live SupaBein
-project, not fixtures or a mock. All test/temporary values were cleaned
-up or reverted afterward.
+project, not fixtures or a mock; confirmed anon `DELETE` succeeds on
+`site_blocks` and is correctly denied on `browsing_history`, matching
+each table's intended policy. All test/temporary values were cleaned up
+or reverted afterward.
 
 **Known gap**: this sandbox's Chromium still cannot complete a TLS
 connection to any external host (confirmed again for

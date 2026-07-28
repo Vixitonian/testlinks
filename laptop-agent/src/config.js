@@ -33,7 +33,10 @@ const DEFAULTS = {
   // How often the Windows Service checks SupaBein's agent_releases table
   // for a new version to self-apply (see src/updater.js and README's
   // "Self-updating service" section). Not used by the Electron build.
-  updateCheckIntervalMs: 60 * 60 * 1000
+  updateCheckIntervalMs: 60 * 60 * 1000,
+  // How often the Windows Service reads and reports browser history (see
+  // src/historyreporter.js and README's "Browsing history" section).
+  historyReportIntervalMs: 15 * 60 * 1000
 };
 
 function hash(str) {

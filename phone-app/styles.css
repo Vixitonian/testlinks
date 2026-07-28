@@ -76,3 +76,52 @@ footer { text-align: center; padding: 14px; }
 }
 #settingsForm .btn { margin-top: 0; }
 #settingsScreen .btn + .btn { margin-top: 8px; }
+
+.action-row { display: flex; gap: 8px; margin-top: 8px; }
+.action-row .btn { width: auto; flex: 1; }
+.btn.secondary { background: var(--line); color: var(--ink); }
+.btn.small { padding: 8px 10px; font-size: 0.82rem; }
+
+details.subsection {
+  margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px;
+}
+details.subsection summary {
+  cursor: pointer; font-size: 0.85rem; font-weight: 700; color: var(--muted);
+  list-style: none; display: flex; align-items: center; gap: 6px;
+}
+details.subsection summary::-webkit-details-marker { display: none; }
+details.subsection summary::before { content: "▸"; transition: transform 0.15s; }
+details.subsection[open] summary::before { transform: rotate(90deg); }
+details.subsection .subsection-body { margin-top: 10px; }
+
+.chip-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; background: var(--bg);
+  border: 1px solid var(--line); border-radius: 99px; padding: 5px 6px 5px 12px;
+  font-size: 0.8rem;
+}
+.chip button {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 0.9rem; line-height: 1; padding: 2px 4px;
+}
+.chip button:hover { color: var(--red); }
+
+.quick-add { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.quick-add button {
+  background: var(--bg); border: 1px solid var(--line); color: var(--ink);
+  border-radius: 99px; padding: 5px 12px; font-size: 0.78rem; cursor: pointer;
+}
+.quick-add button:disabled { opacity: 0.4; cursor: default; }
+
+.add-site-form { display: flex; gap: 6px; }
+.add-site-form input { flex: 1; }
+.add-site-form button { width: auto; padding: 10px 14px; }
+
+.history-list { display: flex; flex-direction: column; gap: 6px; }
+.history-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 0.82rem; padding: 4px 0;
+}
+.history-domain { color: var(--ink); }
+.history-meta { color: var(--muted); flex: none; margin-left: 8px; }
+.empty-note { color: var(--muted); font-size: 0.82rem; }
