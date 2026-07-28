@@ -1,0 +1,8 @@
+node_modules/
+dist/
+out/
+*.log
+.DS_Store
+runtime/
+build/stage/
+build/node-windows-deps/

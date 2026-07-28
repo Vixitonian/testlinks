@@ -1,0 +1,175 @@
+"use strict";
+const supabein = require("./supabein");
+const sitecontrol = require("./sitecontrol");
+const { nowMysqlUtc } = require("./time");
+const { AGENT_VERSION } = require("./version");
+
+/**
+ * Talks directly to SupaBein's Data API (see supabein.js) by polling on
+ * an interval rather than holding a socket open. No cloud-api middle
+ * server — see README's "Talks directly to SupaBein" section for why.
+ * Every tick:
+ *   1. register (once, lazily, retried until it succeeds) — upsert this
+ *      device's row in `devices` keyed on device_uuid
+ *   2. heartbeat — update `devices` with current status, including
+ *      agent_version (src/version.js) so the phone app can show which
+ *      build is actually running on each device — useful for confirming
+ *      a self-update (see updater.js) actually landed
+ *   3. sync the shared quit/unblock passphrase from `settings` — lets the
+ *      phone app change it centrally (see README's "Shared passphrase"
+ *      section) and have it take effect here within one poll interval
+ *   4. sync the desired custom site blocklist from `site_blocks` and
+ *      apply it via the OS hosts file (see sitecontrol.js and README's
+ *      "Custom site blocking" section) — failure here never aborts the
+ *      rest of the tick, it's an auxiliary feature, not core connectivity
+ *   5. check `commands` for a pending row for this device; if found, mark
+ *      it delivered, apply it via Controller, then mark it acked/failed
+ */
+class Connection {
+  constructor({ device, state, controller, config, logger, pollIntervalMs }) {
+    this.device = device;
+    this.state = state;
+    this.controller = controller;
+    this.config = config;
+    this.logger = logger;
+    this.pollIntervalMs = pollIntervalMs || 10000;
+    this._timer = null;
+    this._stopped = true;
+    this._registered = false;
+    this._deviceRowId = null;
+    this._lastAppliedSiteBlocks = null;
+    this._lastReportedSiteBlockError = undefined; // undefined = not yet reported this run
+  }
+
+  start() {
+    this._stopped = false;
+    this._tick(); // fire immediately, then reschedule after each tick completes
+  }
+
+  stop() {
+    this._stopped = true;
+    if (this._timer) clearTimeout(this._timer);
+  }
+
+  async _tick() {
+    if (this._stopped) return;
+    this.state.patch({ connectionStatus: "connecting" });
+
+    try {
+      if (!this._registered) {
+        await this._register();
+        this._registered = true;
+      }
+
+      await this._heartbeat();
+      this.state.patch({ connectionStatus: "connected", lastError: null });
+
+      await this._syncPassphrase();
+      await this._syncSiteBlocks();
+
+      const pending = await supabein.findOne(
+        "commands",
+        { device_uuid: this.device.id, status: "pending" },
+        { order: "id.asc" }
+      );
+      if (pending) {
+        this.logger.info(`SupaBein has a command waiting: ${pending.command} (id ${pending.id})`);
+        await supabein.update("commands", pending.id, { status: "delivered" });
+        const result = await this.controller.applyCommand(pending.command, "server");
+        await supabein.update("commands", pending.id, {
+          status: result.ok ? "acked" : "failed",
+          acked_at: nowMysqlUtc(),
+          error: result.error || null
+        });
+      }
+    } catch (e) {
+      this.logger.warn(`SupaBein poll failed: ${e.message}`);
+      this.state.patch({ connectionStatus: "disconnected" });
+      // A failed register/heartbeat this tick just gets retried next tick.
+    } finally {
+      if (!this._stopped) {
+        this._timer = setTimeout(() => this._tick(), this.pollIntervalMs);
+      }
+    }
+  }
+
+  async _register() {
+    const patch = {
+      hostname: this.device.hostname,
+      platform: this.device.platform,
+      os_release: this.device.osRelease || "",
+      username: this.device.username || "",
+      agent_version: AGENT_VERSION,
+      last_seen: nowMysqlUtc()
+    };
+    const existing = await supabein.findOne("devices", { device_uuid: this.device.id });
+    if (existing) {
+      this._deviceRowId = existing.id;
+      await supabein.update("devices", existing.id, patch);
+    } else {
+      const row = await supabein.insert("devices", {
+        device_uuid: this.device.id,
+        internet_blocked: false,
+        ...patch
+      });
+      this._deviceRowId = row.id;
+    }
+  }
+
+  async _syncPassphrase() {
+    if (!this.config) return;
+    const row = await supabein.findOne("settings", { setting_key: "passphrase_hash" });
+    if (row && row.value && row.value !== this.config.get("quitPassphraseHash")) {
+      this.config.set("quitPassphraseHash", row.value);
+      this.logger.info("Quit/unblock passphrase updated from SupaBein");
+    }
+  }
+
+  async _syncSiteBlocks() {
+    let errorToReport = null;
+    try {
+      const rows = await supabein.list("site_blocks", { device_uuid: this.device.id });
+      const domains = [...new Set(rows.map((r) => r.domain))].sort();
+      const key = JSON.stringify(domains);
+      if (key === this._lastAppliedSiteBlocks) return;
+      sitecontrol.applyBlockedSites(domains, this.logger);
+      this._lastAppliedSiteBlocks = key;
+    } catch (e) {
+      this.logger.warn(`Site block sync failed: ${e.message}`);
+      errorToReport = e.message;
+    }
+    // Reported to `devices.site_block_error` so the phone app can show a
+    // failure instead of silently looking like blocking worked — without
+    // this, a permission error (e.g. Windows Defender's Controlled Folder
+    // Access denying the hosts-file write) was only ever visible in this
+    // machine's local log file, never surfaced anywhere the phone app
+    // could show it. Only writes when the value actually changed, so a
+    // persisting or persisting-absent error doesn't spam an update every
+    // tick.
+    if (errorToReport !== this._lastReportedSiteBlockError && this._deviceRowId != null) {
+      try {
+        await supabein.update("devices", this._deviceRowId, { site_block_error: errorToReport });
+        this._lastReportedSiteBlockError = errorToReport;
+      } catch (_) {
+        // Best-effort — if this write itself fails, the outer tick's
+        // catch/retry will get another chance next cycle regardless.
+      }
+    }
+  }
+
+  async _heartbeat() {
+    if (this._deviceRowId == null) {
+      // Row may have gone missing since register() (e.g. deleted directly
+      // in SupaBein) — re-register instead of updating a nonexistent id.
+      await this._register();
+      return;
+    }
+    await supabein.update("devices", this._deviceRowId, {
+      internet_blocked: this.state.internetBlocked,
+      agent_version: AGENT_VERSION,
+      last_seen: nowMysqlUtc()
+    });
+  }
+}
+
+module.exports = { Connection };

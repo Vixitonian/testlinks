@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Laptop Agent</title>
+<link rel="stylesheet" href="dashboard.css" />
+</head>
+<body>
+  <header>
+    <div class="dot" id="statusDot"></div>
+    <div>
+      <h1 id="hostname">Laptop Agent</h1>
+      <p class="muted" id="deviceId">device id</p>
+    </div>
+  </header>
+
+  <section class="card">
+    <div class="row">
+      <span>Server connection</span>
+      <span class="pill" id="connPill">—</span>
+    </div>
+    <div class="row">
+      <span>Internet</span>
+      <span class="pill" id="blockPill">—</span>
+    </div>
+    <div class="row" id="revertRow" style="display:none">
+      <span>Auto-revert</span>
+      <span class="muted" id="revertAt">—</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <p class="muted small">
+      "Server connection" reflects whether this agent can currently reach
+      SupaBein directly — if it shows "disconnected" for more than a few
+      poll cycles, check your internet connection. The buttons below
+      control the network directly on this machine either way, the same
+      way a remote command from the phone app would.
+    </p>
+    <div class="actions">
+      <button id="blockBtn" class="btn danger">Block Internet</button>
+      <button id="allowBtn" class="btn primary">Allow Internet</button>
+    </div>
+    <p class="error" id="errorMsg"></p>
+  </section>
+
+  <section class="card" id="lastCommandCard" style="display:none">
+    <div class="row">
+      <span>Last command</span>
+      <span id="lastCommand" class="muted">—</span>
+    </div>
+  </section>
+
+  <footer class="muted small">Laptop Agent runs in the background and starts automatically at login.</footer>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>
