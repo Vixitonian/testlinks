@@ -24,15 +24,10 @@
   const combinedTextCard = $("combinedTextCard");
   const combinedTextEl = $("combinedText");
 
-  const narrationSourceRadios = document.getElementsByName("narrationSource");
-  const micSource = $("micSource");
-  const voiceSource = $("voiceSource");
-
   const voiceSelect = $("voiceSelect");
-  const generateVoiceBtn = $("generateVoiceBtn");
-  const generateVoiceStatus = $("generateVoiceStatus");
-  const generateVoiceProgress = $("generateVoiceProgress");
-  const generateVoiceProgressFill = $("generateVoiceProgressFill");
+  const rateRange = $("rateRange");
+  const speakBtn = $("speakBtn");
+  const stopSpeakBtn = $("stopSpeakBtn");
 
   const recordBtn = $("recordBtn");
   const stopRecordBtn = $("stopRecordBtn");
@@ -195,15 +190,6 @@
     }
   });
 
-  // ---- Narration source toggle ----
-  function setNarrationSource(source) {
-    micSource.classList.toggle("hidden", source !== "mic");
-    voiceSource.classList.toggle("hidden", source !== "voice");
-  }
-  narrationSourceRadios.forEach((radio) => {
-    radio.addEventListener("change", (e) => setNarrationSource(e.target.value));
-  });
-
   function setNarration(blob, statusEl, statusText) {
     narrationBlob = blob;
     narrationPlayer.src = URL.createObjectURL(blob);
@@ -226,43 +212,28 @@
     }
   }
 
-  // ---- Voice list (English-only local Piper neural voices) ----
-  function populateVoices() {
+  // ---- Listen (device voice, preview only — not saveable) ----
+  async function populateVoices() {
+    const voices = await HagahAudio.listVoices();
+    const english = voices.filter((v) => v.lang.startsWith("en"));
     voiceSelect.innerHTML = "";
-    ENGLISH_VOICES.forEach((v) => {
+    (english.length ? english : voices).forEach((v) => {
       const opt = document.createElement("option");
-      opt.value = v.id;
-      opt.textContent = v.label;
+      opt.value = v.voiceURI;
+      opt.textContent = `${v.name} (${v.lang})`;
       voiceSelect.appendChild(opt);
     });
   }
 
-  generateVoiceBtn.addEventListener("click", async () => {
+  speakBtn.addEventListener("click", () => {
     if (!verseList.length) return alert("Add at least one verse first.");
-    if (!window.PiperTTS) {
-      return alert("The narration engine is still loading — wait a moment and try again.");
-    }
-    generateVoiceBtn.disabled = true;
-    generateVoiceStatus.textContent = "Loading voice model...";
-    generateVoiceProgress.classList.remove("hidden");
-    generateVoiceProgressFill.style.width = "0%";
-    try {
-      const blob = await window.PiperTTS.predict(combinedText(), voiceSelect.value, (progress) => {
-        if (progress.total) {
-          const pct = Math.round((progress.loaded * 100) / progress.total);
-          generateVoiceProgressFill.style.width = `${pct}%`;
-          generateVoiceStatus.textContent = pct < 100 ? `Downloading voice model... ${pct}%` : "Synthesizing...";
-        }
-      });
-      setNarration(blob, generateVoiceStatus, "Narration generated.");
-    } catch (err) {
-      generateVoiceStatus.textContent = `Failed: ${err.message}`;
-      console.error(err);
-    } finally {
-      generateVoiceBtn.disabled = false;
-      generateVoiceProgress.classList.add("hidden");
-    }
+    HagahAudio.speak(combinedText(), {
+      rate: Number(rateRange.value),
+      voiceURI: voiceSelect.value,
+    });
   });
+
+  stopSpeakBtn.addEventListener("click", () => HagahAudio.stopSpeaking());
 
   // ---- Recording ----
   recordBtn.addEventListener("click", async () => {

@@ -73,29 +73,32 @@
 
     <section class="panel">
       <h2>2. Narrate</h2>
-      <div class="form-row inline narration-source">
-        <label class="radio-label"><input type="radio" name="narrationSource" value="mic" checked /> Record my own voice</label>
-        <label class="radio-label"><input type="radio" name="narrationSource" value="voice" /> Use a preloaded voice</label>
+
+      <div class="subsection">
+        <h3>Listen first <span class="optional">(optional)</span></h3>
+        <div class="form-row inline">
+          <div>
+            <label for="voiceSelect">Voice</label>
+            <select id="voiceSelect"></select>
+          </div>
+          <div>
+            <label for="rateRange">Rate</label>
+            <input id="rateRange" type="range" min="0.5" max="1.5" step="0.05" value="1" />
+          </div>
+        </div>
+        <button id="speakBtn" class="btn">▶ Listen</button>
+        <button id="stopSpeakBtn" class="btn ghost">Stop</button>
+        <p class="hint">
+          Plays through this device's own built-in voice — for hearing the passage, not for
+          saving. Record your own voice below to create a narration you can save.
+        </p>
       </div>
 
-      <div id="micSource" class="subsection">
+      <div class="subsection">
+        <h3>Record your voice</h3>
         <button id="recordBtn" class="btn primary">● Record</button>
         <button id="stopRecordBtn" class="btn ghost" disabled>Stop</button>
         <span id="recordStatus" class="status"></span>
-      </div>
-
-      <div id="voiceSource" class="subsection hidden">
-        <div class="form-row">
-          <label for="voiceSelect">Voice</label>
-          <select id="voiceSelect"></select>
-        </div>
-        <button id="generateVoiceBtn" class="btn primary">Generate narration</button>
-        <span id="generateVoiceStatus" class="status"></span>
-        <div id="generateVoiceProgress" class="progress-bar hidden"><div id="generateVoiceProgressFill"></div></div>
-        <p class="hint">
-          Runs a real neural voice (Piper) entirely in this browser — no server, no account,
-          works on any device. First use of a voice downloads it once (~60MB) and caches it here.
-        </p>
       </div>
 
       <audio id="narrationPlayer" controls class="hidden"></audio>
@@ -143,11 +146,9 @@
 
   <script src="vendor/lame.min.js"></script>
   <script src="js/books.js"></script>
-  <script src="js/voices.js"></script>
   <script src="js/supabein.js"></script>
   <script src="js/bible.js"></script>
   <script src="js/audio.js"></script>
-  <script type="module" src="js/piper.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

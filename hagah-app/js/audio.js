@@ -1,10 +1,37 @@
-// Microphone recording, background-music mixing, and MP3 encoding.
-// All processing happens locally in the browser (Web Audio API + lamejs).
+// Device-voice preview, microphone recording, background-music mixing, and
+// MP3 encoding. All processing happens locally in the browser (Web Audio
+// API + lamejs); the device voice is listen-only (see js/app.js).
 const HagahAudio = (() => {
   let audioCtx = null;
   function ctx() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     return audioCtx;
+  }
+
+  // ---- Device-voice preview (listen only — not exportable to a file) ----
+  function listVoices() {
+    return new Promise((resolve) => {
+      const existing = speechSynthesis.getVoices();
+      if (existing.length) return resolve(existing);
+      speechSynthesis.onvoiceschanged = () => resolve(speechSynthesis.getVoices());
+    });
+  }
+
+  function speak(text, { rate = 1, pitch = 1, voiceURI } = {}) {
+    speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = rate;
+    utter.pitch = pitch;
+    if (voiceURI) {
+      const voice = speechSynthesis.getVoices().find((v) => v.voiceURI === voiceURI);
+      if (voice) utter.voice = voice;
+    }
+    speechSynthesis.speak(utter);
+    return utter;
+  }
+
+  function stopSpeaking() {
+    speechSynthesis.cancel();
   }
 
   // ---- Live preview: hear narration + background music together before saving ----
@@ -163,6 +190,9 @@ const HagahAudio = (() => {
   }
 
   return {
+    listVoices,
+    speak,
+    stopSpeaking,
     startRecording,
     stopRecording,
     isRecording,

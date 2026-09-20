@@ -118,25 +118,6 @@ input, select {
 
 .hidden { display: none !important; }
 
-.narration-source { align-items: center; margin-bottom: 6px; }
-.radio-label { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--ink); cursor: pointer; }
-.radio-label input { accent-color: var(--accent); }
-
-.progress-bar {
-  height: 8px;
-  border-radius: 4px;
-  background: var(--border);
-  overflow: hidden;
-  margin: 8px 0;
-  max-width: 320px;
-}
-.progress-bar > div {
-  height: 100%;
-  width: 0%;
-  background: var(--accent);
-  transition: width 0.15s ease-out;
-}
-
 audio { display: block; margin: 10px 0; width: 100%; }
 
 .save-panel { text-align: center; }
