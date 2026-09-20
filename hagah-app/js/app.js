@@ -153,24 +153,22 @@
     }
   });
 
-  // ---- Speech preview ----
-  async function populateVoices() {
-    const voices = await HagahAudio.listVoices();
+  // ---- Voice list (English-only Google Cloud TTS voices) ----
+  function populateVoices() {
     voiceSelect.innerHTML = "";
-    voices.forEach((v) => {
+    ENGLISH_VOICES.forEach((v) => {
       const opt = document.createElement("option");
-      opt.value = v.voiceURI;
-      opt.textContent = `${v.name} (${v.lang})`;
+      opt.value = v.name;
+      opt.textContent = v.label;
       voiceSelect.appendChild(opt);
     });
   }
 
+  // Free, instant, approximate preview using this device's own voice — the
+  // real selected Google voice is only heard once "Generate narration" runs.
   speakBtn.addEventListener("click", () => {
     if (!currentVerse) return alert("Load a verse first.");
-    HagahAudio.speak(currentVerse.text, {
-      rate: Number(rateRange.value),
-      voiceURI: voiceSelect.value,
-    });
+    HagahAudio.speak(currentVerse.text, { rate: Number(rateRange.value) });
   });
 
   stopSpeakBtn.addEventListener("click", () => HagahAudio.stopSpeaking());
@@ -195,14 +193,17 @@
 
   generateVoiceBtn.addEventListener("click", async () => {
     if (!currentVerse) return alert("Load a verse first.");
+    if (!Supabein.isConfigured()) {
+      return alert("Connect to Supabein in Settings first — narration generation is proxied through your project.");
+    }
     generateVoiceBtn.disabled = true;
-    generateVoiceStatus.textContent = 'Choose "This Tab" and enable "Share tab audio" in the prompt...';
+    generateVoiceStatus.textContent = "Generating narration...";
     try {
-      const blob = await HagahAudio.recordSpeechAsBlob(currentVerse.text, {
-        rate: Number(rateRange.value),
-        voiceURI: voiceSelect.value,
+      const blob = await Supabein.synthesizeSpeech(currentVerse.text, {
+        voiceName: voiceSelect.value,
+        speakingRate: Number(rateRange.value),
       });
-      setNarration(blob, generateVoiceStatus, "Narration captured from the preloaded voice.");
+      setNarration(blob, generateVoiceStatus, "Narration generated.");
     } catch (err) {
       generateVoiceStatus.textContent = `Failed: ${err.message}`;
       console.error(err);

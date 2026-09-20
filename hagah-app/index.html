@@ -83,7 +83,7 @@
       </div>
 
       <div id="voiceSource" class="subsection hidden">
-        <h3>Preloaded voice</h3>
+        <h3>Preloaded voice (English only, for now)</h3>
         <div class="form-row inline">
           <div>
             <label for="voiceSelect">Voice</label>
@@ -94,16 +94,16 @@
             <input id="rateRange" type="range" min="0.5" max="1.5" step="0.05" value="1" />
           </div>
         </div>
-        <button id="speakBtn" class="btn">▶ Just listen</button>
+        <button id="speakBtn" class="btn">▶ Quick preview</button>
         <button id="stopSpeakBtn" class="btn ghost">Stop</button>
-        <button id="generateVoiceBtn" class="btn primary">Use this voice as narration</button>
+        <button id="generateVoiceBtn" class="btn primary">Generate narration</button>
         <span id="generateVoiceStatus" class="status"></span>
         <p class="hint">
-          "Use this voice as narration" records the spoken verse into an audio file so it can be
-          mixed with music and exported, the same as your own recording. Your browser will ask you
-          to share <strong>this tab's audio</strong> — pick "This Tab" and make sure "Share tab audio"
-          is checked. This needs a Chromium-based browser (Chrome, Edge, Brave); it isn't supported
-          everywhere, in which case recording your own voice above still works.
+          "Quick preview" plays an approximate version through this device's own voice, instantly
+          and for free. "Generate narration" calls Google Cloud Text-to-Speech to render the actual
+          selected voice as a real audio file — this works on any device or browser, and the result
+          can be mixed with music and exported. It requires a Supabein connection (see Settings)
+          since the request is proxied server-side to keep the API key private.
         </p>
       </div>
 
@@ -162,6 +162,7 @@
 
   <script src="vendor/lame.min.js"></script>
   <script src="js/books.js"></script>
+  <script src="js/voices.js"></script>
   <script src="js/supabein.js"></script>
   <script src="js/bible.js"></script>
   <script src="js/audio.js"></script>

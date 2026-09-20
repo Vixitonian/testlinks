@@ -8,14 +8,6 @@ const HagahAudio = (() => {
   }
 
   // ---- Text-to-speech preview (listen only, not exportable to a file) ----
-  function listVoices() {
-    return new Promise((resolve) => {
-      const existing = speechSynthesis.getVoices();
-      if (existing.length) return resolve(existing);
-      speechSynthesis.onvoiceschanged = () => resolve(speechSynthesis.getVoices());
-    });
-  }
-
   function speak(text, { rate = 1, pitch = 1, voiceURI } = {}) {
     speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
@@ -134,66 +126,6 @@ const HagahAudio = (() => {
     return Boolean(mediaRecorder && mediaRecorder.state === "recording");
   }
 
-  // ---- Capture a preloaded (device) voice as a real, exportable recording ----
-  // SpeechSynthesis can't be piped into the Web Audio graph directly, but a
-  // Chromium tab-audio share (getDisplayMedia) can capture whatever the tab
-  // plays, including synthesized speech, as a genuine MediaStream to record.
-  function isTabAudioCaptureSupported() {
-    return Boolean(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
-  }
-
-  let captureStream = null;
-  let captureRecorder = null;
-
-  function recordSpeechAsBlob(text, { rate = 1, pitch = 1, voiceURI } = {}) {
-    if (!isTabAudioCaptureSupported()) {
-      return Promise.reject(
-        new Error("This browser can't capture tab audio. Try Chrome/Edge, or record your own voice instead.")
-      );
-    }
-    return navigator.mediaDevices
-      .getDisplayMedia({ video: true, audio: true, preferCurrentTab: true, selfBrowserSurface: "include" })
-      .then((stream) => {
-        captureStream = stream;
-        const audioTracks = stream.getAudioTracks();
-        stream.getVideoTracks().forEach((t) => t.stop());
-        if (!audioTracks.length) {
-          stream.getTracks().forEach((t) => t.stop());
-          throw new Error('No tab audio was shared — choose "This Tab" and check "Share tab audio" when prompted.');
-        }
-        const audioOnlyStream = new MediaStream(audioTracks);
-        const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/ogg";
-        captureRecorder = new MediaRecorder(audioOnlyStream, { mimeType });
-        const chunks = [];
-        captureRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) chunks.push(e.data);
-        };
-
-        return new Promise((resolve, reject) => {
-          captureRecorder.onstop = () => {
-            audioOnlyStream.getTracks().forEach((t) => t.stop());
-            resolve(new Blob(chunks, { type: captureRecorder.mimeType }));
-          };
-          captureRecorder.start();
-          // small lead-in so the recorder is fully live before speech starts
-          setTimeout(() => {
-            const utter = speak(text, { rate, pitch, voiceURI });
-            utter.onend = () => setTimeout(() => captureRecorder.state === "recording" && captureRecorder.stop(), 300);
-            utter.onerror = (e) => {
-              if (captureRecorder.state === "recording") captureRecorder.stop();
-              reject(new Error("Speech synthesis failed: " + e.error));
-            };
-          }, 250);
-        });
-      });
-  }
-
-  function cancelSpeechCapture() {
-    speechSynthesis.cancel();
-    if (captureRecorder && captureRecorder.state === "recording") captureRecorder.stop();
-    if (captureStream) captureStream.getTracks().forEach((t) => t.stop());
-  }
-
   // ---- Decoding & mixing ----
   async function decodeBlob(blob) {
     const arrayBuffer = await blob.arrayBuffer();
@@ -271,15 +203,11 @@ const HagahAudio = (() => {
   }
 
   return {
-    listVoices,
     speak,
     stopSpeaking,
     startRecording,
     stopRecording,
     isRecording,
-    isTabAudioCaptureSupported,
-    recordSpeechAsBlob,
-    cancelSpeechCapture,
     decodeBlob,
     mixNarrationWithMusic,
     encodeMp3,

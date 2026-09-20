@@ -13,12 +13,13 @@ project so they show up in your library across devices.
   the free [bible-api.com](https://bible-api.com) (World English Bible,
   public domain).
 - **Two narration sources** — record your own voice via `MediaRecorder`, or
-  use one of the browser's built-in text-to-speech voices. Since Web Speech
-  can't be piped into the Web Audio graph directly, "Use this voice as
-  narration" captures it into a real exportable file via a Chromium tab-audio
-  share (`getDisplayMedia`, "This Tab" + "Share tab audio") — needs Chrome,
-  Edge, or another Chromium-based browser; a quick "Just listen" preview
-  (no export) always works everywhere.
+  generate narration from a preloaded English voice using Google Cloud
+  Text-to-Speech, proxied server-side through Supabein so the API key never
+  reaches the browser. Both produce a real audio file that flows through the
+  same mix/export pipeline, and both work on any device or browser (no
+  microphone or screen-share permission needed for the voice option). A free
+  "Quick preview" using the device's own voice is also available for an
+  instant, zero-cost check before spending TTS quota.
 - **Preview together** — before exporting, play the narration (recorded or
   device voice) mixed live with the background track at the chosen volumes,
   so you can judge the balance without waiting for a full MP3 encode.
@@ -84,6 +85,32 @@ token you provide in Settings rather than a public anon key.
 Uploaded audio files are stored in the `hagah-audio` bucket and served
 publicly at `https://supabein.dxinnovationhub.com/api/v1/storage/<project_id>/hagah-audio/<filename>`.
 
+### Preloaded-voice narration (Google Cloud Text-to-Speech)
+
+"Generate narration" calls a Supabein **integration** named `google-tts`,
+which proxies the request to Google Cloud's `text:synthesize` endpoint
+server-side — the API key is stored as a locked secret and is never sent to
+the browser. It's registered once per project:
+
+```bash
+curl -X POST "https://supabein.dxinnovationhub.com/api/v1/projects/<project_id>/integrations" \
+  -H "Authorization: Bearer <your PAT>" -H "Content-Type: application/json" \
+  -d '{
+    "name": "google-tts",
+    "base_url": "https://texttospeech.googleapis.com/v1/",
+    "secret": "<your Google Cloud API key>",
+    "auth_style": "query:key"
+  }'
+```
+
+The app then calls `POST /projects/<project_id>/integrations/google-tts/proxy`
+with `{"method":"POST","path":"text:synthesize","body":{...}}`, and Supabein
+appends `?key=<secret>` before forwarding to Google. The response's
+`audioContent` (base64 MP3) is decoded client-side into a `Blob`, just like a
+microphone recording. Voices are currently limited to a curated English-only
+list in `js/voices.js`; other languages can be added by extending that list
+with any [Google Cloud TTS voice name](https://cloud.google.com/text-to-speech/docs/voices).
+
 ## Project structure
 
 ```
@@ -92,9 +119,10 @@ hagah-app/
 ├── css/style.css
 ├── js/
 │   ├── books.js      # static list of Bible books + chapter counts
-│   ├── bible.js       # bible-api.com client
-│   ├── supabein.js     # Supabein REST client (data + storage)
-│   ├── audio.js        # speech preview, recording, mixing, MP3 encode
-│   └── app.js          # UI wiring
+│   ├── voices.js      # curated English Google Cloud TTS voice list
+│   ├── bible.js        # bible-api.com client
+│   ├── supabein.js      # Supabein REST client (data, storage, TTS proxy)
+│   ├── audio.js          # local preview, mic recording, mixing, MP3 encode
+│   └── app.js            # UI wiring
 └── vendor/lame.min.js   # lamejs MP3 encoder (vendored, MIT licensed)
 ```

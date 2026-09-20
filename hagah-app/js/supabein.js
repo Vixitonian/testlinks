@@ -84,6 +84,41 @@ const Supabein = (() => {
     });
   }
 
+  // ---- Text-to-speech via the "google-tts" integration (server-side proxy) ----
+  // The Google Cloud API key never reaches the browser: it's stored as a
+  // locked secret on the Supabein integration and injected server-side.
+  const TTS_INTEGRATION = "google-tts";
+
+  async function synthesizeSpeech(text, { voiceName, speakingRate = 1 } = {}) {
+    const { projectId } = getConfig();
+    if (text.length > 4500) {
+      throw new Error("This passage is too long for one narration request — try a shorter range of verses.");
+    }
+    const data = await request(`/projects/${projectId}/integrations/${TTS_INTEGRATION}/proxy`, {
+      method: "POST",
+      body: {
+        method: "POST",
+        path: "text:synthesize",
+        body: {
+          input: { text },
+          voice: { languageCode: "en-US", name: voiceName },
+          audioConfig: { audioEncoding: "MP3", speakingRate },
+        },
+      },
+    });
+    const upstream = data.body || {};
+    if (data.status >= 400) {
+      throw new Error(upstream.error?.message || `Google TTS error ${data.status}`);
+    }
+    if (!upstream.audioContent) {
+      throw new Error("Google TTS returned no audio.");
+    }
+    const binary = atob(upstream.audioContent);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: "audio/mp3" });
+  }
+
   function publicUrl(relativeOrFullUrl) {
     if (/^https?:\/\//.test(relativeOrFullUrl)) return relativeOrFullUrl;
     return `https://supabein.dxinnovationhub.com${relativeOrFullUrl}`;
@@ -100,5 +135,6 @@ const Supabein = (() => {
     deleteRecording,
     uploadAudio,
     deleteAudio,
+    synthesizeSpeech,
   };
 })();
