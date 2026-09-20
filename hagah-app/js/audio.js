@@ -1,4 +1,4 @@
-// Speech preview, microphone recording, background-music mixing, and MP3 export.
+// Microphone recording, background-music mixing, and MP3 encoding.
 // All processing happens locally in the browser (Web Audio API + lamejs).
 const HagahAudio = (() => {
   let audioCtx = null;
@@ -7,30 +7,10 @@ const HagahAudio = (() => {
     return audioCtx;
   }
 
-  // ---- Text-to-speech preview (listen only, not exportable to a file) ----
-  function speak(text, { rate = 1, pitch = 1, voiceURI } = {}) {
-    speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.rate = rate;
-    utter.pitch = pitch;
-    if (voiceURI) {
-      const voice = speechSynthesis.getVoices().find((v) => v.voiceURI === voiceURI);
-      if (voice) utter.voice = voice;
-    }
-    speechSynthesis.speak(utter);
-    return utter;
-  }
-
-  function stopSpeaking() {
-    speechSynthesis.cancel();
-  }
-
-  // ---- Live preview: hear narration + background music together before exporting ----
+  // ---- Live preview: hear narration + background music together before saving ----
   let previewSources = [];
-  let previewMusicEl = null;
 
   function stopPreview() {
-    speechSynthesis.cancel();
     previewSources.forEach((n) => {
       try {
         n.stop();
@@ -39,16 +19,11 @@ const HagahAudio = (() => {
       }
     });
     previewSources = [];
-    if (previewMusicEl) {
-      previewMusicEl.pause();
-      URL.revokeObjectURL(previewMusicEl.src);
-      previewMusicEl = null;
-    }
   }
 
-  // Real preview of the actual recorded narration mixed live with the music file,
-  // at the same volumes that will be used for export.
-  async function previewRecordedMix(narrationBlob, musicFile, { narrationGain = 1, musicGain = 0.25 } = {}) {
+  // Preview of the actual narration (mic recording or generated voice) mixed
+  // live with the music file, at the same volumes used when saving.
+  async function previewMix(narrationBlob, musicFile, { narrationGain = 1, musicGain = 0.25 } = {}) {
     stopPreview();
     await ctx().resume();
     const narrationBuffer = await decodeBlob(narrationBlob);
@@ -78,22 +53,7 @@ const HagahAudio = (() => {
     return narrationBuffer.duration;
   }
 
-  // Approximate preview using the device voice (Web Speech can't be routed into
-  // the Web Audio graph, so the music plays back separately alongside it).
-  function previewSpeechWithMusic(text, musicFile, { rate = 1, pitch = 1, voiceURI, musicGain = 0.25 } = {}) {
-    stopPreview();
-    if (musicFile) {
-      previewMusicEl = new Audio(URL.createObjectURL(musicFile));
-      previewMusicEl.loop = true;
-      previewMusicEl.volume = Math.min(1, Math.max(0, musicGain));
-      previewMusicEl.play().catch(() => {});
-    }
-    const utter = speak(text, { rate, pitch, voiceURI });
-    utter.onend = () => stopPreview();
-    utter.onerror = () => stopPreview();
-  }
-
-  // ---- Microphone recording (the source used for MP3 export) ----
+  // ---- Microphone recording (one of the two narration sources) ----
   let mediaRecorder = null;
   let recordedChunks = [];
   let micStream = null;
@@ -203,16 +163,13 @@ const HagahAudio = (() => {
   }
 
   return {
-    speak,
-    stopSpeaking,
     startRecording,
     stopRecording,
     isRecording,
     decodeBlob,
     mixNarrationWithMusic,
     encodeMp3,
-    previewRecordedMix,
-    previewSpeechWithMusic,
+    previewMix,
     stopPreview,
   };
 })();

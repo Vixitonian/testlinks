@@ -2,6 +2,11 @@
   const $ = (id) => document.getElementById(id);
 
   // ---- Elements ----
+  const tabCreate = $("tabCreate");
+  const tabLibrary = $("tabLibrary");
+  const createView = $("createView");
+  const libraryView = $("libraryView");
+
   const settingsToggle = $("settingsToggle");
   const settingsPanel = $("settingsPanel");
   const projectIdInput = $("projectIdInput");
@@ -14,20 +19,16 @@
   const chapterSelect = $("chapterSelect");
   const verseStart = $("verseStart");
   const verseEnd = $("verseEnd");
-  const loadVerseBtn = $("loadVerseBtn");
-  const verseCard = $("verseCard");
-  const verseReference = $("verseReference");
-  const verseText = $("verseText");
-  const verseTranslation = $("verseTranslation");
+  const addVerseBtn = $("addVerseBtn");
+  const verseListEl = $("verseList");
+  const combinedTextCard = $("combinedTextCard");
+  const combinedTextEl = $("combinedText");
 
   const narrationSourceRadios = document.getElementsByName("narrationSource");
   const micSource = $("micSource");
   const voiceSource = $("voiceSource");
 
   const voiceSelect = $("voiceSelect");
-  const rateRange = $("rateRange");
-  const speakBtn = $("speakBtn");
-  const stopSpeakBtn = $("stopSpeakBtn");
   const generateVoiceBtn = $("generateVoiceBtn");
   const generateVoiceStatus = $("generateVoiceStatus");
   const generateVoiceProgress = $("generateVoiceProgress");
@@ -46,21 +47,28 @@
   const stopPreviewBtn = $("stopPreviewBtn");
   const previewHint = $("previewHint");
 
-  const exportBtn = $("exportBtn");
-  const exportStatus = $("exportStatus");
-  const exportHint = $("exportHint");
-  const exportResult = $("exportResult");
-  const mixPlayer = $("mixPlayer");
-  const downloadLink = $("downloadLink");
-  const saveToLibraryBtn = $("saveToLibraryBtn");
+  const saveBtn = $("saveBtn");
+  const saveStatus = $("saveStatus");
+  const saveHint = $("saveHint");
 
   const refreshLibraryBtn = $("refreshLibraryBtn");
-  const libraryList = $("libraryList");
+  const libraryGrid = $("libraryGrid");
+  const libraryHint = $("libraryHint");
 
   // ---- State ----
-  let currentVerse = null;
+  let verseList = []; // { book, chapter, verseStart, verseEnd, reference, text }
   let narrationBlob = null;
-  let mixedMp3Blob = null;
+
+  // ---- Tabs ----
+  function setView(view) {
+    createView.classList.toggle("hidden", view !== "create");
+    libraryView.classList.toggle("hidden", view !== "library");
+    tabCreate.classList.toggle("active", view === "create");
+    tabLibrary.classList.toggle("active", view === "library");
+    if (view === "library") loadLibrary();
+  }
+  tabCreate.addEventListener("click", () => setView("create"));
+  tabLibrary.addEventListener("click", () => setView("library"));
 
   // ---- Settings ----
   function refreshConnectionStatus() {
@@ -71,6 +79,8 @@
     } else {
       connectionStatus.textContent = "Not connected";
     }
+    libraryHint.classList.toggle("hidden", Supabein.isConfigured());
+    updateSaveState();
   }
 
   settingsToggle.addEventListener("click", () => settingsPanel.classList.toggle("hidden"));
@@ -87,7 +97,8 @@
       const me = await Supabein.whoAmI();
       connectionStatus.textContent = `Connected as ${me.email} (project ${me.project_id || projectId})`;
       tokenInput.value = "";
-      loadLibrary();
+      refreshConnectionStatus();
+      if (!libraryView.classList.contains("hidden")) loadLibrary();
     } catch (err) {
       connectionStatus.textContent = `Connection failed: ${err.message}`;
       Supabein.clearConfig();
@@ -97,10 +108,10 @@
   disconnectBtn.addEventListener("click", () => {
     Supabein.clearConfig();
     refreshConnectionStatus();
-    libraryList.innerHTML = "";
+    libraryGrid.innerHTML = "";
   });
 
-  // ---- Verse picker ----
+  // ---- Verse builder ----
   function populateBooks() {
     BIBLE_BOOKS.forEach(([name]) => {
       const opt = document.createElement("option");
@@ -125,56 +136,64 @@
 
   bookSelect.addEventListener("change", populateChapters);
 
-  loadVerseBtn.addEventListener("click", async () => {
-    loadVerseBtn.disabled = true;
-    loadVerseBtn.textContent = "Loading...";
+  function renderVerseList() {
+    verseListEl.innerHTML = "";
+    verseList.forEach((v, i) => {
+      const li = document.createElement("li");
+      const label = document.createElement("span");
+      label.textContent = v.reference;
+      const removeBtn = document.createElement("button");
+      removeBtn.textContent = "×";
+      removeBtn.title = "Remove";
+      removeBtn.addEventListener("click", () => {
+        verseList.splice(i, 1);
+        renderVerseList();
+      });
+      li.append(label, removeBtn);
+      verseListEl.appendChild(li);
+    });
+    if (verseList.length) {
+      combinedTextEl.textContent = verseList.map((v) => v.text).join("\n\n");
+      combinedTextCard.classList.remove("hidden");
+    } else {
+      combinedTextCard.classList.add("hidden");
+    }
+    updateSaveState();
+  }
+
+  function combinedText() {
+    return verseList.map((v) => v.text).join("\n\n");
+  }
+
+  function combinedReference() {
+    return verseList.map((v) => v.reference).join("; ");
+  }
+
+  addVerseBtn.addEventListener("click", async () => {
+    addVerseBtn.disabled = true;
+    addVerseBtn.textContent = "Adding...";
     try {
-      const passage = await Bible.fetchPassage(
-        bookSelect.value,
-        Number(chapterSelect.value),
-        Number(verseStart.value),
-        verseEnd.value ? Number(verseEnd.value) : Number(verseStart.value)
-      );
-      currentVerse = {
-        book: bookSelect.value,
-        chapter: Number(chapterSelect.value),
-        verseStart: Number(verseStart.value),
-        verseEnd: verseEnd.value ? Number(verseEnd.value) : Number(verseStart.value),
-        text: passage.text,
+      const book = bookSelect.value;
+      const chapter = Number(chapterSelect.value);
+      const vStart = Number(verseStart.value);
+      const vEnd = verseEnd.value ? Number(verseEnd.value) : vStart;
+      const passage = await Bible.fetchPassage(book, chapter, vStart, vEnd);
+      verseList.push({
+        book,
+        chapter,
+        verseStart: vStart,
+        verseEnd: vEnd,
         reference: passage.reference,
-      };
-      verseReference.textContent = passage.reference;
-      verseText.textContent = passage.text;
-      verseTranslation.textContent = passage.translation;
-      verseCard.classList.remove("hidden");
+        text: passage.text,
+      });
+      renderVerseList();
     } catch (err) {
       alert(err.message);
     } finally {
-      loadVerseBtn.disabled = false;
-      loadVerseBtn.textContent = "Load verse";
+      addVerseBtn.disabled = false;
+      addVerseBtn.textContent = "+ Add verse";
     }
   });
-
-  // ---- Voice list (English-only local Piper neural voices) ----
-  function populateVoices() {
-    voiceSelect.innerHTML = "";
-    ENGLISH_VOICES.forEach((v) => {
-      const opt = document.createElement("option");
-      opt.value = v.id;
-      opt.textContent = v.label;
-      voiceSelect.appendChild(opt);
-    });
-  }
-
-  // Free, instant, approximate preview using this device's own built-in
-  // voice — the real selected Piper voice is only heard once "Generate
-  // narration" runs (which needs to load/run the actual neural model).
-  speakBtn.addEventListener("click", () => {
-    if (!currentVerse) return alert("Load a verse first.");
-    HagahAudio.speak(currentVerse.text, { rate: Number(rateRange.value) });
-  });
-
-  stopSpeakBtn.addEventListener("click", () => HagahAudio.stopSpeaking());
 
   // ---- Narration source toggle ----
   function setNarrationSource(source) {
@@ -189,13 +208,37 @@
     narrationBlob = blob;
     narrationPlayer.src = URL.createObjectURL(blob);
     narrationPlayer.classList.remove("hidden");
-    exportBtn.disabled = false;
-    exportHint.textContent = "Ready — this will mix in your background track (if any) and encode an MP3.";
     if (statusEl) statusEl.textContent = statusText;
+    updateSaveState();
+  }
+
+  function updateSaveState() {
+    const ready = verseList.length > 0 && Boolean(narrationBlob);
+    saveBtn.disabled = !ready;
+    if (!verseList.length) {
+      saveHint.textContent = "Add a verse and narrate it to enable saving.";
+    } else if (!narrationBlob) {
+      saveHint.textContent = "Narrate your passage above to enable saving.";
+    } else if (!Supabein.isConfigured()) {
+      saveHint.textContent = "Connect to Supabein (⚙ Settings) to save your creation.";
+    } else {
+      saveHint.textContent = "Ready to save.";
+    }
+  }
+
+  // ---- Voice list (English-only local Piper neural voices) ----
+  function populateVoices() {
+    voiceSelect.innerHTML = "";
+    ENGLISH_VOICES.forEach((v) => {
+      const opt = document.createElement("option");
+      opt.value = v.id;
+      opt.textContent = v.label;
+      voiceSelect.appendChild(opt);
+    });
   }
 
   generateVoiceBtn.addEventListener("click", async () => {
-    if (!currentVerse) return alert("Load a verse first.");
+    if (!verseList.length) return alert("Add at least one verse first.");
     if (!window.PiperTTS) {
       return alert("The narration engine is still loading — wait a moment and try again.");
     }
@@ -204,7 +247,7 @@
     generateVoiceProgress.classList.remove("hidden");
     generateVoiceProgressFill.style.width = "0%";
     try {
-      const blob = await window.PiperTTS.predict(currentVerse.text, voiceSelect.value, (progress) => {
+      const blob = await window.PiperTTS.predict(combinedText(), voiceSelect.value, (progress) => {
         if (progress.total) {
           const pct = Math.round((progress.loaded * 100) / progress.total);
           generateVoiceProgressFill.style.width = `${pct}%`;
@@ -223,7 +266,7 @@
 
   // ---- Recording ----
   recordBtn.addEventListener("click", async () => {
-    if (!currentVerse) return alert("Load a verse first so you know what to read.");
+    if (!verseList.length) return alert("Add at least one verse first so you know what to read.");
     try {
       await HagahAudio.startRecording();
       recordBtn.disabled = true;
@@ -241,29 +284,19 @@
     setNarration(blob, recordStatus, "Recorded.");
   });
 
-  // ---- Preview: hear the verse + background music together before exporting ----
+  // ---- Preview: hear the narration + background music together ----
   previewBtn.addEventListener("click", async () => {
+    if (!narrationBlob) return alert("Narrate your passage first.");
     const music = musicFile.files[0] || null;
     try {
-      if (narrationBlob) {
-        previewHint.textContent = "Playing your recording mixed with the music...";
-        const duration = await HagahAudio.previewRecordedMix(narrationBlob, music, {
-          narrationGain: Number(narrationVolume.value),
-          musicGain: Number(musicVolume.value),
-        });
-        setTimeout(() => {
-          previewHint.textContent = "Preview finished. Adjust the volumes above and preview again, or export below.";
-        }, duration * 1000);
-      } else if (currentVerse) {
-        previewHint.textContent = "Playing an approximate preview (device voice + music can't be volume-mixed the same way a real recording can).";
-        HagahAudio.previewSpeechWithMusic(currentVerse.text, music, {
-          rate: Number(rateRange.value),
-          voiceURI: voiceSelect.value,
-          musicGain: Number(musicVolume.value),
-        });
-      } else {
-        alert("Load a verse first.");
-      }
+      previewHint.textContent = "Playing...";
+      const duration = await HagahAudio.previewMix(narrationBlob, music, {
+        narrationGain: Number(narrationVolume.value),
+        musicGain: Number(musicVolume.value),
+      });
+      setTimeout(() => {
+        previewHint.textContent = "Preview finished. Adjust the volumes above and preview again, or save below.";
+      }, duration * 1000);
     } catch (err) {
       previewHint.textContent = `Preview failed: ${err.message}`;
       console.error(err);
@@ -272,12 +305,16 @@
 
   stopPreviewBtn.addEventListener("click", () => HagahAudio.stopPreview());
 
-  // ---- Export ----
-  exportBtn.addEventListener("click", async () => {
-    if (!narrationBlob) return alert("Record your voice first.");
+  // ---- Save ----
+  saveBtn.addEventListener("click", async () => {
+    if (!narrationBlob || !verseList.length) return;
+    if (!Supabein.isConfigured()) {
+      settingsPanel.classList.remove("hidden");
+      return alert("Connect to Supabein in Settings first.");
+    }
     HagahAudio.stopPreview();
-    exportBtn.disabled = true;
-    exportStatus.textContent = "Decoding audio...";
+    saveBtn.disabled = true;
+    saveStatus.textContent = "Mixing...";
     try {
       const narrationBuffer = await HagahAudio.decodeBlob(narrationBlob);
       let musicBuffer = null;
@@ -285,79 +322,88 @@
         try {
           musicBuffer = await HagahAudio.decodeBlob(musicFile.files[0]);
         } catch (musicErr) {
-          console.error("Background music failed to decode, exporting narration only:", musicErr);
-          exportStatus.textContent = "Couldn't read that music file — exporting your voice only...";
+          console.error("Background music failed to decode, saving narration only:", musicErr);
+          saveStatus.textContent = "Couldn't read that music file — saving your voice only...";
           musicBuffer = null;
         }
       }
-      exportStatus.textContent = "Mixing...";
+      saveStatus.textContent = "Mixing...";
       const mixed = await HagahAudio.mixNarrationWithMusic(narrationBuffer, musicBuffer, {
         narrationGain: Number(narrationVolume.value),
         musicGain: Number(musicVolume.value),
       });
-      exportStatus.textContent = "Encoding MP3...";
-      mixedMp3Blob = HagahAudio.encodeMp3(mixed);
-      const url = URL.createObjectURL(mixedMp3Blob);
-      mixPlayer.src = url;
-      downloadLink.href = url;
-      const safeName = currentVerse ? currentVerse.reference.replace(/[^a-z0-9]+/gi, "_") : "hagah";
-      downloadLink.download = `${safeName}.mp3`;
-      exportResult.classList.remove("hidden");
-      exportStatus.textContent = "Done.";
-    } catch (err) {
-      console.error("Export failed:", err);
-      exportStatus.textContent = `Failed: ${err.message}`;
-    } finally {
-      exportBtn.disabled = false;
-    }
-  });
+      saveStatus.textContent = "Encoding...";
+      const mp3Blob = HagahAudio.encodeMp3(mixed);
 
-  saveToLibraryBtn.addEventListener("click", async () => {
-    if (!mixedMp3Blob || !currentVerse) return;
-    if (!Supabein.isConfigured()) return alert("Connect to Supabein in Settings first.");
-    saveToLibraryBtn.disabled = true;
-    saveToLibraryBtn.textContent = "Saving...";
-    try {
-      const filename = `${Date.now()}_${currentVerse.reference.replace(/[^a-z0-9]+/gi, "_")}.mp3`;
-      const audioUrl = await Supabein.uploadAudio(mixedMp3Blob, filename);
+      saveStatus.textContent = "Uploading...";
+      const reference = combinedReference();
+      const filename = `${Date.now()}_${reference.replace(/[^a-z0-9]+/gi, "_").slice(0, 80)}.mp3`;
+      const audioUrl = await Supabein.uploadAudio(mp3Blob, filename);
       await Supabein.insertRecording({
-        verse_ref: currentVerse.reference,
-        book: currentVerse.book,
-        chapter: currentVerse.chapter,
-        verse_start: currentVerse.verseStart,
-        verse_end: currentVerse.verseEnd,
-        verse_text: currentVerse.text,
+        verse_ref: reference,
+        verse_text: combinedText(),
+        verses_json: verseList.map((v) => ({
+          book: v.book,
+          chapter: v.chapter,
+          verse_start: v.verseStart,
+          verse_end: v.verseEnd,
+          reference: v.reference,
+        })),
         background_track: musicFile.files[0] ? musicFile.files[0].name : null,
         audio_url: audioUrl,
       });
-      saveToLibraryBtn.textContent = "Saved!";
-      loadLibrary();
+      saveStatus.textContent = "Saved!";
+      setView("library");
     } catch (err) {
-      alert(`Could not save: ${err.message}`);
-      saveToLibraryBtn.textContent = "Save to my library";
+      saveStatus.textContent = `Failed: ${err.message}`;
+      console.error(err);
     } finally {
-      saveToLibraryBtn.disabled = false;
+      saveBtn.disabled = false;
     }
   });
 
   // ---- Library ----
   async function loadLibrary() {
-    if (!Supabein.isConfigured()) return;
-    libraryList.innerHTML = "<li>Loading...</li>";
+    if (!Supabein.isConfigured()) {
+      libraryGrid.innerHTML = "";
+      return;
+    }
+    libraryGrid.innerHTML = "<p class='hint'>Loading...</p>";
     try {
       const { data } = await Supabein.listRecordings();
       if (!data.length) {
-        libraryList.innerHTML = "<li>No recordings saved yet.</li>";
+        libraryGrid.innerHTML = "<p class='hint'>No creations saved yet.</p>";
         return;
       }
-      libraryList.innerHTML = "";
+      libraryGrid.innerHTML = "";
       data.forEach((row) => {
-        const li = document.createElement("li");
-        const info = document.createElement("div");
-        info.innerHTML = `<strong>${row.verse_ref}</strong><br><span class="meta">${new Date(row.created_at).toLocaleString()}${row.background_track ? " · " + row.background_track : ""}</span>`;
+        const card = document.createElement("div");
+        card.className = "creation-card";
+
+        const title = document.createElement("p");
+        title.className = "title";
+        title.textContent = row.verse_ref;
+
+        const meta = document.createElement("p");
+        meta.className = "meta";
+        meta.textContent = `${new Date(row.created_at).toLocaleString()}${row.background_track ? " · " + row.background_track : ""}`;
+
         const audio = document.createElement("audio");
         audio.controls = true;
         audio.src = row.audio_url;
+
+        const actions = document.createElement("div");
+        actions.className = "card-actions";
+
+        const loopLabel = document.createElement("label");
+        loopLabel.className = "loop-label";
+        const loopCheckbox = document.createElement("input");
+        loopCheckbox.type = "checkbox";
+        loopCheckbox.addEventListener("change", () => {
+          audio.loop = loopCheckbox.checked;
+        });
+        loopLabel.append(loopCheckbox, document.createTextNode("Loop"));
+
         const delBtn = document.createElement("button");
         delBtn.className = "btn ghost";
         delBtn.textContent = "Delete";
@@ -367,11 +413,13 @@
           await Supabein.deleteAudio(filename).catch(() => {});
           loadLibrary();
         });
-        li.append(info, audio, delBtn);
-        libraryList.appendChild(li);
+
+        actions.append(loopLabel, delBtn);
+        card.append(title, meta, audio, actions);
+        libraryGrid.appendChild(card);
       });
     } catch (err) {
-      libraryList.innerHTML = `<li>Failed to load: ${err.message}</li>`;
+      libraryGrid.innerHTML = `<p class="hint">Failed to load: ${err.message}</p>`;
     }
   }
 
@@ -381,5 +429,4 @@
   populateBooks();
   populateVoices();
   refreshConnectionStatus();
-  if (Supabein.isConfigured()) loadLibrary();
 })();

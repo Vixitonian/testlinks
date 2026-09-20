@@ -9,18 +9,18 @@
 </head>
 <body>
   <header class="app-header">
-    <div class="brand">
-      <h1>Hagah</h1>
-      <p>Meditate on Scripture aloud — record it, layer in music, export an MP3.</p>
-    </div>
-    <button id="settingsToggle" class="btn ghost">Settings</button>
+    <h1>Hagah</h1>
+    <nav class="tabs">
+      <button id="tabCreate" class="tab-btn active" data-view="create">Create</button>
+      <button id="tabLibrary" class="tab-btn" data-view="library">My Creations</button>
+    </nav>
+    <button id="settingsToggle" class="btn ghost icon-btn" title="Settings" aria-label="Settings">⚙</button>
   </header>
 
   <section id="settingsPanel" class="panel hidden">
     <h2>Connect to your Supabein project</h2>
     <p class="hint">
-      Your recordings can be saved to your own Supabein backend so they show up in your library
-      on any device. This is optional — recording, mixing and MP3 export all work offline without it.
+      Connect once so your creations can be saved and appear in "My Creations" on any device.
       Your token is stored only in this browser (localStorage) and is sent only to
       <code>supabein.dxinnovationhub.com</code>.
     </p>
@@ -39,9 +39,11 @@
     </div>
   </section>
 
-  <main class="grid">
+  <!-- ============ CREATE VIEW ============ -->
+  <main id="createView" class="view">
     <section class="panel">
-      <h2>1. Choose a verse</h2>
+      <h2>1. Build your passage</h2>
+      <p class="hint">Add one or more verse ranges — from any book, in any order — to read as one passage.</p>
       <div class="form-row">
         <label for="bookSelect">Book</label>
         <select id="bookSelect"></select>
@@ -60,107 +62,84 @@
           <input id="verseEnd" type="number" min="1" />
         </div>
       </div>
-      <button id="loadVerseBtn" class="btn primary">Load verse</button>
-      <div id="verseCard" class="verse-card hidden">
-        <p id="verseReference" class="verse-ref"></p>
-        <p id="verseText" class="verse-text"></p>
-        <p id="verseTranslation" class="verse-translation"></p>
+      <button id="addVerseBtn" class="btn primary">+ Add verse</button>
+
+      <ul id="verseList" class="verse-list"></ul>
+      <div id="combinedTextCard" class="verse-card hidden">
+        <p class="verse-ref">Your passage</p>
+        <p id="combinedText" class="verse-text"></p>
       </div>
     </section>
 
     <section class="panel">
-      <h2>2. Choose your narration</h2>
+      <h2>2. Narrate</h2>
       <div class="form-row inline narration-source">
         <label class="radio-label"><input type="radio" name="narrationSource" value="mic" checked /> Record my own voice</label>
         <label class="radio-label"><input type="radio" name="narrationSource" value="voice" /> Use a preloaded voice</label>
       </div>
 
       <div id="micSource" class="subsection">
-        <h3>Record your voice</h3>
         <button id="recordBtn" class="btn primary">● Record</button>
         <button id="stopRecordBtn" class="btn ghost" disabled>Stop</button>
         <span id="recordStatus" class="status"></span>
       </div>
 
       <div id="voiceSource" class="subsection hidden">
-        <h3>Preloaded voice (English only, for now)</h3>
-        <div class="form-row inline">
-          <div>
-            <label for="voiceSelect">Voice</label>
-            <select id="voiceSelect"></select>
-          </div>
-          <div>
-            <label for="rateRange">Quick-preview rate</label>
-            <input id="rateRange" type="range" min="0.5" max="1.5" step="0.05" value="1" />
-          </div>
+        <div class="form-row">
+          <label for="voiceSelect">Voice</label>
+          <select id="voiceSelect"></select>
         </div>
-        <button id="speakBtn" class="btn">▶ Quick preview</button>
-        <button id="stopSpeakBtn" class="btn ghost">Stop</button>
         <button id="generateVoiceBtn" class="btn primary">Generate narration</button>
         <span id="generateVoiceStatus" class="status"></span>
         <div id="generateVoiceProgress" class="progress-bar hidden"><div id="generateVoiceProgressFill"></div></div>
         <p class="hint">
-          "Quick preview" plays an approximate version through this device's own built-in voice,
-          instantly. "Generate narration" runs a real neural text-to-speech model
-          (<a href="https://github.com/rhasspy/piper" target="_blank" rel="noopener">Piper</a>)
-          entirely in this browser tab via WebAssembly — no server, no API key, works on any device.
-          The first time you use a given voice it downloads a one-time model file (~60MB) and caches
-          it in this browser for next time.
+          Runs a real neural voice (Piper) entirely in this browser — no server, no account,
+          works on any device. First use of a voice downloads it once (~60MB) and caches it here.
         </p>
       </div>
 
       <audio id="narrationPlayer" controls class="hidden"></audio>
+    </section>
 
-      <div class="subsection">
-        <h3>3. Add background music (optional)</h3>
-        <div class="form-row">
-          <label for="musicFile">Background track (mp3/wav/ogg from your device)</label>
-          <input id="musicFile" type="file" accept="audio/*" />
-        </div>
-        <div class="form-row inline">
-          <div>
-            <label for="narrationVolume">Voice volume</label>
-            <input id="narrationVolume" type="range" min="0" max="1.5" step="0.05" value="1" />
-          </div>
-          <div>
-            <label for="musicVolume">Music volume</label>
-            <input id="musicVolume" type="range" min="0" max="1" step="0.05" value="0.25" />
-          </div>
-        </div>
+    <section class="panel">
+      <h2>3. Background music <span class="optional">(optional)</span></h2>
+      <div class="form-row">
+        <label for="musicFile">Track from your device</label>
+        <input id="musicFile" type="file" accept="audio/*" />
       </div>
-
-      <div class="subsection">
-        <h3>4. Preview together</h3>
-        <button id="previewBtn" class="btn">▶ Preview verse + music</button>
-        <button id="stopPreviewBtn" class="btn ghost">Stop</button>
-        <p id="previewHint" class="hint">
-          Load a verse (and optionally a background track) above, then preview here.
-          If you've recorded your voice, the preview plays your actual recording mixed
-          live at the volumes set above. Otherwise it plays the device-voice preview
-          alongside the music so you can judge the balance before recording.
-        </p>
-      </div>
-
-      <div class="subsection">
-        <h3>5. Export</h3>
-        <button id="exportBtn" class="btn primary" disabled>Mix &amp; export MP3</button>
-        <span id="exportStatus" class="status"></span>
-        <p id="exportHint" class="hint">Record your voice above to enable export.</p>
-        <div id="exportResult" class="hidden">
-          <audio id="mixPlayer" controls></audio>
-          <a id="downloadLink" class="btn" download>Download MP3</a>
-          <button id="saveToLibraryBtn" class="btn ghost">Save to my library</button>
+      <div class="form-row inline">
+        <div>
+          <label for="narrationVolume">Voice volume</label>
+          <input id="narrationVolume" type="range" min="0" max="1.5" step="0.05" value="1" />
+        </div>
+        <div>
+          <label for="musicVolume">Music volume</label>
+          <input id="musicVolume" type="range" min="0" max="1" step="0.05" value="0.25" />
         </div>
       </div>
+      <button id="previewBtn" class="btn">▶ Preview</button>
+      <button id="stopPreviewBtn" class="btn ghost">Stop</button>
+      <p id="previewHint" class="hint">Narrate above, then preview your voice mixed with the music here.</p>
+    </section>
+
+    <section class="panel save-panel">
+      <button id="saveBtn" class="btn primary big" disabled>Save creation</button>
+      <span id="saveStatus" class="status"></span>
+      <p id="saveHint" class="hint">Add a verse and narrate it to enable saving.</p>
     </section>
   </main>
 
-  <section class="panel">
-    <h2>Your library</h2>
-    <p class="hint">Requires a Supabein connection (see Settings).</p>
-    <button id="refreshLibraryBtn" class="btn ghost">Refresh</button>
-    <ul id="libraryList" class="library-list"></ul>
-  </section>
+  <!-- ============ LIBRARY VIEW ============ -->
+  <main id="libraryView" class="view hidden">
+    <section class="panel">
+      <div class="library-header">
+        <h2>My Creations</h2>
+        <button id="refreshLibraryBtn" class="btn ghost">Refresh</button>
+      </div>
+      <p id="libraryHint" class="hint">Connect to Supabein (⚙ Settings) to see and save your creations here.</p>
+      <div id="libraryGrid" class="library-grid"></div>
+    </section>
+  </main>
 
   <script src="vendor/lame.min.js"></script>
   <script src="js/books.js"></script>
