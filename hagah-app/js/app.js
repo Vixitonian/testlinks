@@ -2,18 +2,15 @@
   const $ = (id) => document.getElementById(id);
 
   // ---- Elements ----
-  const tabCreate = $("tabCreate");
-  const tabLibrary = $("tabLibrary");
-  const createView = $("createView");
-  const libraryView = $("libraryView");
+  const listView = $("listView");
+  const notesList = $("notesList");
+  const listHint = $("listHint");
+  const addNoteBtn = $("addNoteBtn");
 
-  const settingsToggle = $("settingsToggle");
-  const settingsPanel = $("settingsPanel");
-  const projectIdInput = $("projectIdInput");
-  const tokenInput = $("tokenInput");
-  const connectBtn = $("connectBtn");
-  const disconnectBtn = $("disconnectBtn");
-  const connectionStatus = $("connectionStatus");
+  const editView = $("editView");
+  const backBtn = $("backBtn");
+  const editTitle = $("editTitle");
+  const deleteNoteBtn = $("deleteNoteBtn");
 
   const bookSelect = $("bookSelect");
   const chapterSelect = $("chapterSelect");
@@ -23,6 +20,10 @@
   const verseListEl = $("verseList");
   const combinedTextCard = $("combinedTextCard");
   const combinedTextEl = $("combinedText");
+
+  const currentAudioBlock = $("currentAudioBlock");
+  const currentAudioPlayer = $("currentAudioPlayer");
+  const currentAudioLoop = $("currentAudioLoop");
 
   const voiceSelect = $("voiceSelect");
   const rateRange = $("rateRange");
@@ -34,6 +35,7 @@
   const recordStatus = $("recordStatus");
   const narrationPlayer = $("narrationPlayer");
 
+  const musicChoice = $("musicChoice");
   const musicFile = $("musicFile");
   const narrationVolume = $("narrationVolume");
   const musicVolume = $("musicVolume");
@@ -46,64 +48,72 @@
   const saveStatus = $("saveStatus");
   const saveHint = $("saveHint");
 
-  const refreshLibraryBtn = $("refreshLibraryBtn");
-  const libraryGrid = $("libraryGrid");
-  const libraryHint = $("libraryHint");
+  const DEFAULT_MUSIC_URL = "assets/meditation-bg.mp3";
 
   // ---- State ----
   let verseList = []; // { book, chapter, verseStart, verseEnd, reference, text }
   let narrationBlob = null;
+  let editingRow = null; // the saved row being edited, or null when creating new
 
-  // ---- Tabs ----
-  function setView(view) {
-    createView.classList.toggle("hidden", view !== "create");
-    libraryView.classList.toggle("hidden", view !== "library");
-    tabCreate.classList.toggle("active", view === "create");
-    tabLibrary.classList.toggle("active", view === "library");
-    if (view === "library") loadLibrary();
+  // ---- Navigation ----
+  function showList() {
+    editView.classList.add("hidden");
+    listView.classList.remove("hidden");
+    loadNotes();
   }
-  tabCreate.addEventListener("click", () => setView("create"));
-  tabLibrary.addEventListener("click", () => setView("library"));
 
-  // ---- Settings ----
-  function refreshConnectionStatus() {
-    const cfg = Supabein.getConfig();
-    if (cfg.projectId && cfg.token) {
-      connectionStatus.textContent = `Connected to project ${cfg.projectId}`;
-      projectIdInput.value = cfg.projectId;
+  function showEditor(row) {
+    editingRow = row || null;
+    verseList = [];
+    narrationBlob = null;
+    narrationPlayer.src = "";
+    narrationPlayer.classList.add("hidden");
+    recordStatus.textContent = "";
+    musicChoice.value = "default";
+    musicFile.value = "";
+    musicFile.classList.add("hidden");
+    narrationVolume.value = 1;
+    musicVolume.value = 0.25;
+    previewHint.textContent = "Record your voice above, then preview it mixed with music here.";
+
+    if (row) {
+      editTitle.textContent = "Edit creation";
+      deleteNoteBtn.classList.remove("hidden");
+      currentAudioBlock.classList.remove("hidden");
+      currentAudioPlayer.src = row.audio_url;
+      currentAudioLoop.checked = false;
+      currentAudioPlayer.loop = false;
+      const refs = (row.verses_json || []).length ? row.verses_json : null;
+      const texts = (row.verse_text || "").split("\n\n");
+      if (refs) {
+        refs.forEach((v, i) => {
+          verseList.push({
+            book: v.book,
+            chapter: v.chapter,
+            verseStart: v.verse_start,
+            verseEnd: v.verse_end,
+            reference: v.reference,
+            text: texts[i] || "",
+          });
+        });
+      }
     } else {
-      connectionStatus.textContent = "Not connected";
+      editTitle.textContent = "New creation";
+      deleteNoteBtn.classList.add("hidden");
+      currentAudioBlock.classList.add("hidden");
+      currentAudioPlayer.src = "";
     }
-    libraryHint.classList.toggle("hidden", Supabein.isConfigured());
-    updateSaveState();
+
+    renderVerseList();
+    listView.classList.add("hidden");
+    editView.classList.remove("hidden");
   }
 
-  settingsToggle.addEventListener("click", () => settingsPanel.classList.toggle("hidden"));
-
-  connectBtn.addEventListener("click", async () => {
-    const projectId = projectIdInput.value.trim();
-    const token = tokenInput.value.trim();
-    if (!projectId || !token) {
-      connectionStatus.textContent = "Enter both project ID and token.";
-      return;
-    }
-    Supabein.setConfig({ projectId, token });
-    try {
-      const me = await Supabein.whoAmI();
-      connectionStatus.textContent = `Connected as ${me.email} (project ${me.project_id || projectId})`;
-      tokenInput.value = "";
-      refreshConnectionStatus();
-      if (!libraryView.classList.contains("hidden")) loadLibrary();
-    } catch (err) {
-      connectionStatus.textContent = `Connection failed: ${err.message}`;
-      Supabein.clearConfig();
-    }
-  });
-
-  disconnectBtn.addEventListener("click", () => {
-    Supabein.clearConfig();
-    refreshConnectionStatus();
-    libraryGrid.innerHTML = "";
+  addNoteBtn.addEventListener("click", () => showEditor(null));
+  backBtn.addEventListener("click", () => {
+    HagahAudio.stopPreview();
+    HagahAudio.stopSpeaking();
+    showList();
   });
 
   // ---- Verse builder ----
@@ -190,29 +200,7 @@
     }
   });
 
-  function setNarration(blob, statusEl, statusText) {
-    narrationBlob = blob;
-    narrationPlayer.src = URL.createObjectURL(blob);
-    narrationPlayer.classList.remove("hidden");
-    if (statusEl) statusEl.textContent = statusText;
-    updateSaveState();
-  }
-
-  function updateSaveState() {
-    const ready = verseList.length > 0 && Boolean(narrationBlob);
-    saveBtn.disabled = !ready;
-    if (!verseList.length) {
-      saveHint.textContent = "Add a verse and narrate it to enable saving.";
-    } else if (!narrationBlob) {
-      saveHint.textContent = "Narrate your passage above to enable saving.";
-    } else if (!Supabein.isConfigured()) {
-      saveHint.textContent = "Connect to Supabein (⚙ Settings) to save your creation.";
-    } else {
-      saveHint.textContent = "Ready to save.";
-    }
-  }
-
-  // ---- Listen (device voice, preview only — not saveable) ----
+  // ---- Listen (device voice, preview only) ----
   async function populateVoices() {
     const voices = await HagahAudio.listVoices();
     const english = voices.filter((v) => v.lang.startsWith("en"));
@@ -236,6 +224,14 @@
   stopSpeakBtn.addEventListener("click", () => HagahAudio.stopSpeaking());
 
   // ---- Recording ----
+  function setNarration(blob, statusText) {
+    narrationBlob = blob;
+    narrationPlayer.src = URL.createObjectURL(blob);
+    narrationPlayer.classList.remove("hidden");
+    recordStatus.textContent = statusText;
+    updateSaveState();
+  }
+
   recordBtn.addEventListener("click", async () => {
     if (!verseList.length) return alert("Add at least one verse first so you know what to read.");
     try {
@@ -252,15 +248,41 @@
     const blob = await HagahAudio.stopRecording();
     recordBtn.disabled = false;
     stopRecordBtn.disabled = true;
-    setNarration(blob, recordStatus, "Recorded.");
+    setNarration(blob, "Recorded.");
   });
 
-  // ---- Preview: hear the narration + background music together ----
+  function updateSaveState() {
+    const ready = verseList.length > 0 && (Boolean(narrationBlob) || Boolean(editingRow));
+    saveBtn.disabled = !ready;
+    if (!verseList.length) {
+      saveHint.textContent = "Add a verse and narrate it to enable saving.";
+    } else if (!narrationBlob && !editingRow) {
+      saveHint.textContent = "Record your voice above to enable saving.";
+    } else if (!narrationBlob && editingRow) {
+      saveHint.textContent = "Ready — will keep the current recording unless you record a new one.";
+    } else {
+      saveHint.textContent = "Ready to save.";
+    }
+  }
+
+  // ---- Background music ----
+  musicChoice.addEventListener("change", () => {
+    musicFile.classList.toggle("hidden", musicChoice.value !== "custom");
+  });
+
+  async function getMusicBlob() {
+    if (musicChoice.value === "none") return null;
+    if (musicChoice.value === "custom") return musicFile.files[0] || null;
+    const res = await fetch(DEFAULT_MUSIC_URL);
+    return res.blob();
+  }
+
+  // ---- Preview ----
   previewBtn.addEventListener("click", async () => {
-    if (!narrationBlob) return alert("Narrate your passage first.");
-    const music = musicFile.files[0] || null;
+    if (!narrationBlob) return alert("Record your voice first — the current saved recording can't be previewed here.");
     try {
       previewHint.textContent = "Playing...";
+      const music = await getMusicBlob();
       const duration = await HagahAudio.previewMix(narrationBlob, music, {
         narrationGain: Number(narrationVolume.value),
         musicGain: Number(musicVolume.value),
@@ -276,55 +298,71 @@
 
   stopPreviewBtn.addEventListener("click", () => HagahAudio.stopPreview());
 
+  currentAudioLoop.addEventListener("change", () => {
+    currentAudioPlayer.loop = currentAudioLoop.checked;
+  });
+
   // ---- Save ----
   saveBtn.addEventListener("click", async () => {
-    if (!narrationBlob || !verseList.length) return;
-    if (!Supabein.isConfigured()) {
-      settingsPanel.classList.remove("hidden");
-      return alert("Connect to Supabein in Settings first.");
-    }
+    if (!verseList.length) return;
+    if (!narrationBlob && !editingRow) return;
     HagahAudio.stopPreview();
     saveBtn.disabled = true;
-    saveStatus.textContent = "Mixing...";
-    try {
-      const narrationBuffer = await HagahAudio.decodeBlob(narrationBlob);
-      let musicBuffer = null;
-      if (musicFile.files[0]) {
-        try {
-          musicBuffer = await HagahAudio.decodeBlob(musicFile.files[0]);
-        } catch (musicErr) {
-          console.error("Background music failed to decode, saving narration only:", musicErr);
-          saveStatus.textContent = "Couldn't read that music file — saving your voice only...";
-          musicBuffer = null;
-        }
-      }
-      saveStatus.textContent = "Mixing...";
-      const mixed = await HagahAudio.mixNarrationWithMusic(narrationBuffer, musicBuffer, {
-        narrationGain: Number(narrationVolume.value),
-        musicGain: Number(musicVolume.value),
-      });
-      saveStatus.textContent = "Encoding...";
-      const mp3Blob = HagahAudio.encodeMp3(mixed);
+    const reference = combinedReference();
+    const metadata = {
+      verse_ref: reference,
+      verse_text: combinedText(),
+      verses_json: verseList.map((v) => ({
+        book: v.book,
+        chapter: v.chapter,
+        verse_start: v.verseStart,
+        verse_end: v.verseEnd,
+        reference: v.reference,
+      })),
+    };
 
-      saveStatus.textContent = "Uploading...";
-      const reference = combinedReference();
-      const filename = `${Date.now()}_${reference.replace(/[^a-z0-9]+/gi, "_").slice(0, 80)}.mp3`;
-      const audioUrl = await Supabein.uploadAudio(mp3Blob, filename);
-      await Supabein.insertRecording({
-        verse_ref: reference,
-        verse_text: combinedText(),
-        verses_json: verseList.map((v) => ({
-          book: v.book,
-          chapter: v.chapter,
-          verse_start: v.verseStart,
-          verse_end: v.verseEnd,
-          reference: v.reference,
-        })),
-        background_track: musicFile.files[0] ? musicFile.files[0].name : null,
-        audio_url: audioUrl,
-      });
+    try {
+      if (narrationBlob) {
+        saveStatus.textContent = "Mixing...";
+        const narrationBuffer = await HagahAudio.decodeBlob(narrationBlob);
+        let musicBuffer = null;
+        const music = await getMusicBlob();
+        if (music) {
+          try {
+            musicBuffer = await HagahAudio.decodeBlob(music);
+          } catch (musicErr) {
+            console.error("Background music failed to decode, saving narration only:", musicErr);
+            saveStatus.textContent = "Couldn't read that music file — saving your voice only...";
+            musicBuffer = null;
+          }
+        }
+        saveStatus.textContent = "Mixing...";
+        const mixed = await HagahAudio.mixNarrationWithMusic(narrationBuffer, musicBuffer, {
+          narrationGain: Number(narrationVolume.value),
+          musicGain: Number(musicVolume.value),
+        });
+        saveStatus.textContent = "Encoding...";
+        const mp3Blob = HagahAudio.encodeMp3(mixed);
+
+        saveStatus.textContent = "Uploading...";
+        const filename = `${Date.now()}_${reference.replace(/[^a-z0-9]+/gi, "_").slice(0, 80)}.mp3`;
+        const audioUrl = await Supabein.uploadAudio(mp3Blob, filename);
+        metadata.audio_url = audioUrl;
+        metadata.background_track = musicChoice.value === "none" ? null : musicChoice.value === "default" ? "meditation-bg.mp3" : musicFile.files[0].name;
+
+        if (editingRow) {
+          await Supabein.updateRecording(editingRow.id, metadata);
+          const oldFilename = editingRow.audio_url.split("/").pop();
+          await Supabein.deleteAudio(oldFilename).catch(() => {});
+        } else {
+          await Supabein.insertRecording(metadata);
+        }
+      } else {
+        saveStatus.textContent = "Saving...";
+        await Supabein.updateRecording(editingRow.id, metadata);
+      }
       saveStatus.textContent = "Saved!";
-      setView("library");
+      showList();
     } catch (err) {
       saveStatus.textContent = `Failed: ${err.message}`;
       console.error(err);
@@ -333,71 +371,65 @@
     }
   });
 
-  // ---- Library ----
-  async function loadLibrary() {
+  deleteNoteBtn.addEventListener("click", async () => {
+    if (!editingRow) return;
+    if (!confirm("Delete this creation? This can't be undone.")) return;
+    try {
+      const filename = editingRow.audio_url.split("/").pop();
+      await Supabein.deleteRecording(editingRow.id);
+      await Supabein.deleteAudio(filename).catch(() => {});
+      showList();
+    } catch (err) {
+      alert(`Could not delete: ${err.message}`);
+    }
+  });
+
+  // ---- List ----
+  async function loadNotes() {
     if (!Supabein.isConfigured()) {
-      libraryGrid.innerHTML = "";
+      listHint.textContent = "Missing js/config.js — see js/config.example.js.";
+      listHint.classList.remove("hidden");
+      notesList.innerHTML = "";
       return;
     }
-    libraryGrid.innerHTML = "<p class='hint'>Loading...</p>";
+    listHint.textContent = "Loading...";
+    listHint.classList.remove("hidden");
+    notesList.innerHTML = "";
     try {
       const { data } = await Supabein.listRecordings();
       if (!data.length) {
-        libraryGrid.innerHTML = "<p class='hint'>No creations saved yet.</p>";
+        listHint.textContent = "No creations yet — tap + to add one.";
         return;
       }
-      libraryGrid.innerHTML = "";
+      listHint.classList.add("hidden");
       data.forEach((row) => {
-        const card = document.createElement("div");
-        card.className = "creation-card";
-
+        const el = document.createElement("button");
+        el.className = "note-row";
+        el.type = "button";
+        const main = document.createElement("div");
+        main.className = "note-main";
         const title = document.createElement("p");
-        title.className = "title";
+        title.className = "note-title";
         title.textContent = row.verse_ref;
-
         const meta = document.createElement("p");
-        meta.className = "meta";
-        meta.textContent = `${new Date(row.created_at).toLocaleString()}${row.background_track ? " · " + row.background_track : ""}`;
-
-        const audio = document.createElement("audio");
-        audio.controls = true;
-        audio.src = row.audio_url;
-
-        const actions = document.createElement("div");
-        actions.className = "card-actions";
-
-        const loopLabel = document.createElement("label");
-        loopLabel.className = "loop-label";
-        const loopCheckbox = document.createElement("input");
-        loopCheckbox.type = "checkbox";
-        loopCheckbox.addEventListener("change", () => {
-          audio.loop = loopCheckbox.checked;
-        });
-        loopLabel.append(loopCheckbox, document.createTextNode("Loop"));
-
-        const delBtn = document.createElement("button");
-        delBtn.className = "btn ghost";
-        delBtn.textContent = "Delete";
-        delBtn.addEventListener("click", async () => {
-          const filename = row.audio_url.split("/").pop();
-          await Supabein.deleteRecording(row.id);
-          await Supabein.deleteAudio(filename).catch(() => {});
-          loadLibrary();
-        });
-
-        actions.append(loopLabel, delBtn);
-        card.append(title, meta, audio, actions);
-        libraryGrid.appendChild(card);
+        meta.className = "note-meta";
+        meta.textContent = new Date(row.created_at).toLocaleString();
+        main.append(title, meta);
+        const chevron = document.createElement("span");
+        chevron.className = "chevron";
+        chevron.textContent = "›";
+        el.append(main, chevron);
+        el.addEventListener("click", () => showEditor(row));
+        notesList.appendChild(el);
       });
     } catch (err) {
-      libraryGrid.innerHTML = `<p class="hint">Failed to load: ${err.message}</p>`;
+      listHint.textContent = `Failed to load: ${err.message}`;
+      listHint.classList.remove("hidden");
     }
   }
-
-  refreshLibraryBtn.addEventListener("click", loadLibrary);
 
   // ---- Init ----
   populateBooks();
   populateVoices();
-  refreshConnectionStatus();
+  loadNotes();
 })();

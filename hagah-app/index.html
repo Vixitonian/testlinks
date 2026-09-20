@@ -3,47 +3,32 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Hagah — Scripture Audio Studio</title>
+<title>Hagah</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%96%3C/text%3E%3C/svg%3E" />
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <header class="app-header">
     <h1>Hagah</h1>
-    <nav class="tabs">
-      <button id="tabCreate" class="tab-btn active" data-view="create">Create</button>
-      <button id="tabLibrary" class="tab-btn" data-view="library">My Creations</button>
-    </nav>
-    <button id="settingsToggle" class="btn ghost icon-btn" title="Settings" aria-label="Settings">⚙</button>
   </header>
 
-  <section id="settingsPanel" class="panel hidden">
-    <h2>Connect to your Supabein project</h2>
-    <p class="hint">
-      Connect once so your creations can be saved and appear in "My Creations" on any device.
-      Your token is stored only in this browser (localStorage) and is sent only to
-      <code>supabein.dxinnovationhub.com</code>.
-    </p>
-    <div class="form-row">
-      <label for="projectIdInput">Project ID</label>
-      <input id="projectIdInput" type="text" placeholder="e.g. 127" />
-    </div>
-    <div class="form-row">
-      <label for="tokenInput">Personal access token</label>
-      <input id="tokenInput" type="password" placeholder="sb_pat_..." autocomplete="off" />
-    </div>
-    <div class="form-actions">
-      <button id="connectBtn" class="btn primary">Connect</button>
-      <button id="disconnectBtn" class="btn ghost">Disconnect</button>
-      <span id="connectionStatus" class="status"></span>
-    </div>
-  </section>
+  <!-- ============ LIST VIEW ============ -->
+  <main id="listView" class="view">
+    <div id="notesList" class="notes-list"></div>
+    <p id="listHint" class="hint centered">Loading...</p>
+    <button id="addNoteBtn" class="fab" title="Add creation" aria-label="Add creation">+</button>
+  </main>
 
-  <!-- ============ CREATE VIEW ============ -->
-  <main id="createView" class="view">
+  <!-- ============ EDIT VIEW ============ -->
+  <main id="editView" class="view hidden">
+    <div class="edit-header">
+      <button id="backBtn" class="btn ghost">‹ Back</button>
+      <h2 id="editTitle">New creation</h2>
+      <button id="deleteNoteBtn" class="btn ghost danger hidden">Delete</button>
+    </div>
+
     <section class="panel">
-      <h2>1. Build your passage</h2>
-      <p class="hint">Add one or more verse ranges — from any book, in any order — to read as one passage.</p>
+      <h3>Passage</h3>
       <div class="form-row">
         <label for="bookSelect">Book</label>
         <select id="bookSelect"></select>
@@ -66,19 +51,23 @@
 
       <ul id="verseList" class="verse-list"></ul>
       <div id="combinedTextCard" class="verse-card hidden">
-        <p class="verse-ref">Your passage</p>
         <p id="combinedText" class="verse-text"></p>
       </div>
     </section>
 
     <section class="panel">
-      <h2>2. Narrate</h2>
+      <h3>Narration</h3>
+
+      <div id="currentAudioBlock" class="subsection hidden">
+        <p class="hint">Current recording</p>
+        <audio id="currentAudioPlayer" controls></audio>
+        <label class="loop-label"><input type="checkbox" id="currentAudioLoop" /> Loop</label>
+      </div>
 
       <div class="subsection">
-        <h3>Listen first <span class="optional">(optional)</span></h3>
         <div class="form-row inline">
           <div>
-            <label for="voiceSelect">Voice</label>
+            <label for="voiceSelect">Listen with</label>
             <select id="voiceSelect"></select>
           </div>
           <div>
@@ -88,28 +77,27 @@
         </div>
         <button id="speakBtn" class="btn">▶ Listen</button>
         <button id="stopSpeakBtn" class="btn ghost">Stop</button>
-        <p class="hint">
-          Plays through this device's own built-in voice — for hearing the passage, not for
-          saving. Record your own voice below to create a narration you can save.
-        </p>
+        <p class="hint">Preview only, through this device's voice — not saved.</p>
       </div>
 
       <div class="subsection">
-        <h3>Record your voice</h3>
-        <button id="recordBtn" class="btn primary">● Record</button>
+        <button id="recordBtn" class="btn primary">● Record my voice</button>
         <button id="stopRecordBtn" class="btn ghost" disabled>Stop</button>
         <span id="recordStatus" class="status"></span>
+        <audio id="narrationPlayer" controls class="hidden"></audio>
       </div>
-
-      <audio id="narrationPlayer" controls class="hidden"></audio>
     </section>
 
     <section class="panel">
-      <h2>3. Background music <span class="optional">(optional)</span></h2>
+      <h3>Background music</h3>
       <div class="form-row">
-        <label for="musicFile">Track from your device</label>
-        <input id="musicFile" type="file" accept="audio/*" />
+        <select id="musicChoice">
+          <option value="default" selected>Meditation (default)</option>
+          <option value="none">None</option>
+          <option value="custom">Upload my own…</option>
+        </select>
       </div>
+      <input id="musicFile" type="file" accept="audio/*" class="hidden" />
       <div class="form-row inline">
         <div>
           <label for="narrationVolume">Voice volume</label>
@@ -122,30 +110,19 @@
       </div>
       <button id="previewBtn" class="btn">▶ Preview</button>
       <button id="stopPreviewBtn" class="btn ghost">Stop</button>
-      <p id="previewHint" class="hint">Narrate above, then preview your voice mixed with the music here.</p>
+      <p id="previewHint" class="hint">Record your voice above, then preview it mixed with music here.</p>
     </section>
 
     <section class="panel save-panel">
-      <button id="saveBtn" class="btn primary big" disabled>Save creation</button>
+      <button id="saveBtn" class="btn primary big" disabled>Save</button>
       <span id="saveStatus" class="status"></span>
       <p id="saveHint" class="hint">Add a verse and narrate it to enable saving.</p>
     </section>
   </main>
 
-  <!-- ============ LIBRARY VIEW ============ -->
-  <main id="libraryView" class="view hidden">
-    <section class="panel">
-      <div class="library-header">
-        <h2>My Creations</h2>
-        <button id="refreshLibraryBtn" class="btn ghost">Refresh</button>
-      </div>
-      <p id="libraryHint" class="hint">Connect to Supabein (⚙ Settings) to see and save your creations here.</p>
-      <div id="libraryGrid" class="library-grid"></div>
-    </section>
-  </main>
-
   <script src="vendor/lame.min.js"></script>
   <script src="js/books.js"></script>
+  <script src="js/config.js"></script>
   <script src="js/supabein.js"></script>
   <script src="js/bible.js"></script>
   <script src="js/audio.js"></script>

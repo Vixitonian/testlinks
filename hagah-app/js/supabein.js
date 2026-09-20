@@ -1,26 +1,14 @@
 // Thin client for the Supabein Framework REST API.
-// The project id and personal access token are never hardcoded here — the
-// user enters them once in the Settings panel and they are kept only in
-// this browser's localStorage, sent only to supabein.dxinnovationhub.com.
+// The project id and token come from js/config.js (not committed to git —
+// see js/config.example.js), so the app connects automatically with no
+// settings screen. Never hardcode real credentials into a file that gets
+// committed to version control.
 
 const Supabein = (() => {
-  const STORAGE_KEY = "hagah_supabein_config";
   const DEFAULT_BASE = "https://supabein.dxinnovationhub.com/api/v1";
 
   function getConfig() {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-    } catch {
-      return {};
-    }
-  }
-
-  function setConfig({ projectId, token }) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ projectId, token }));
-  }
-
-  function clearConfig() {
-    localStorage.removeItem(STORAGE_KEY);
+    return (typeof HAGAH_CONFIG !== "undefined" && HAGAH_CONFIG) || {};
   }
 
   function isConfigured() {
@@ -30,7 +18,7 @@ const Supabein = (() => {
 
   async function request(path, { method = "GET", body, headers = {} } = {}) {
     const { token } = getConfig();
-    if (!token) throw new Error("Supabein is not connected. Add your project token in Settings.");
+    if (!token) throw new Error("Missing js/config.js — see js/config.example.js.");
     const isForm = body instanceof FormData;
     const res = await fetch(`${DEFAULT_BASE}${path}`, {
       method,
@@ -47,10 +35,6 @@ const Supabein = (() => {
     return data;
   }
 
-  async function whoAmI() {
-    return request("/auth/me");
-  }
-
   async function listRecordings() {
     const { projectId } = getConfig();
     return request(`/data/${projectId}/recordings?order=created_at.desc&limit=100`);
@@ -59,6 +43,11 @@ const Supabein = (() => {
   async function insertRecording(row) {
     const { projectId } = getConfig();
     return request(`/data/${projectId}/recordings`, { method: "POST", body: row });
+  }
+
+  async function updateRecording(id, row) {
+    const { projectId } = getConfig();
+    return request(`/data/${projectId}/recordings/${id}`, { method: "PATCH", body: row });
   }
 
   async function deleteRecording(id) {
@@ -90,13 +79,10 @@ const Supabein = (() => {
   }
 
   return {
-    getConfig,
-    setConfig,
-    clearConfig,
     isConfigured,
-    whoAmI,
     listRecordings,
     insertRecording,
+    updateRecording,
     deleteRecording,
     uploadAudio,
     deleteAudio,
