@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hagah — Scripture Audio Studio</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%96%3C/text%3E%3C/svg%3E" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <h1>Hagah</h1>
+      <p>Meditate on Scripture aloud — record it, layer in music, export an MP3.</p>
+    </div>
+    <button id="settingsToggle" class="btn ghost">Settings</button>
+  </header>
+
+  <section id="settingsPanel" class="panel hidden">
+    <h2>Connect to your Supabein project</h2>
+    <p class="hint">
+      Your recordings can be saved to your own Supabein backend so they show up in your library
+      on any device. This is optional — recording, mixing and MP3 export all work offline without it.
+      Your token is stored only in this browser (localStorage) and is sent only to
+      <code>supabein.dxinnovationhub.com</code>.
+    </p>
+    <div class="form-row">
+      <label for="projectIdInput">Project ID</label>
+      <input id="projectIdInput" type="text" placeholder="e.g. 127" />
+    </div>
+    <div class="form-row">
+      <label for="tokenInput">Personal access token</label>
+      <input id="tokenInput" type="password" placeholder="sb_pat_..." autocomplete="off" />
+    </div>
+    <div class="form-actions">
+      <button id="connectBtn" class="btn primary">Connect</button>
+      <button id="disconnectBtn" class="btn ghost">Disconnect</button>
+      <span id="connectionStatus" class="status"></span>
+    </div>
+  </section>
+
+  <main class="grid">
+    <section class="panel">
+      <h2>1. Choose a verse</h2>
+      <div class="form-row">
+        <label for="bookSelect">Book</label>
+        <select id="bookSelect"></select>
+      </div>
+      <div class="form-row inline">
+        <div>
+          <label for="chapterSelect">Chapter</label>
+          <select id="chapterSelect"></select>
+        </div>
+        <div>
+          <label for="verseStart">Verse from</label>
+          <input id="verseStart" type="number" min="1" value="1" />
+        </div>
+        <div>
+          <label for="verseEnd">to (optional)</label>
+          <input id="verseEnd" type="number" min="1" />
+        </div>
+      </div>
+      <button id="loadVerseBtn" class="btn primary">Load verse</button>
+      <div id="verseCard" class="verse-card hidden">
+        <p id="verseReference" class="verse-ref"></p>
+        <p id="verseText" class="verse-text"></p>
+        <p id="verseTranslation" class="verse-translation"></p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>2. Listen or record</h2>
+      <div class="subsection">
+        <h3>Preview with a device voice</h3>
+        <div class="form-row inline">
+          <div>
+            <label for="voiceSelect">Voice</label>
+            <select id="voiceSelect"></select>
+          </div>
+          <div>
+            <label for="rateRange">Rate</label>
+            <input id="rateRange" type="range" min="0.5" max="1.5" step="0.05" value="1" />
+          </div>
+        </div>
+        <button id="speakBtn" class="btn">Speak verse</button>
+        <button id="stopSpeakBtn" class="btn ghost">Stop</button>
+        <p class="hint">Speech preview plays through your speakers only — it can't be exported. Record your own voice below to create an MP3.</p>
+      </div>
+
+      <div class="subsection">
+        <h3>Record your voice</h3>
+        <button id="recordBtn" class="btn primary">● Record</button>
+        <button id="stopRecordBtn" class="btn ghost" disabled>Stop</button>
+        <span id="recordStatus" class="status"></span>
+        <audio id="narrationPlayer" controls class="hidden"></audio>
+      </div>
+
+      <div class="subsection">
+        <h3>3. Add background music (optional)</h3>
+        <div class="form-row">
+          <label for="musicFile">Background track (mp3/wav/ogg from your device)</label>
+          <input id="musicFile" type="file" accept="audio/*" />
+        </div>
+        <div class="form-row inline">
+          <div>
+            <label for="narrationVolume">Voice volume</label>
+            <input id="narrationVolume" type="range" min="0" max="1.5" step="0.05" value="1" />
+          </div>
+          <div>
+            <label for="musicVolume">Music volume</label>
+            <input id="musicVolume" type="range" min="0" max="1" step="0.05" value="0.25" />
+          </div>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>4. Export</h3>
+        <button id="exportBtn" class="btn primary" disabled>Mix &amp; export MP3</button>
+        <span id="exportStatus" class="status"></span>
+        <div id="exportResult" class="hidden">
+          <audio id="mixPlayer" controls></audio>
+          <a id="downloadLink" class="btn" download>Download MP3</a>
+          <button id="saveToLibraryBtn" class="btn ghost">Save to my library</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <section class="panel">
+    <h2>Your library</h2>
+    <p class="hint">Requires a Supabein connection (see Settings).</p>
+    <button id="refreshLibraryBtn" class="btn ghost">Refresh</button>
+    <ul id="libraryList" class="library-list"></ul>
+  </section>
+
+  <script src="vendor/lame.min.js"></script>
+  <script src="js/books.js"></script>
+  <script src="js/supabein.js"></script>
+  <script src="js/bible.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
