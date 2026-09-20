@@ -90,7 +90,7 @@
             <select id="voiceSelect"></select>
           </div>
           <div>
-            <label for="rateRange">Rate</label>
+            <label for="rateRange">Quick-preview rate</label>
             <input id="rateRange" type="range" min="0.5" max="1.5" step="0.05" value="1" />
           </div>
         </div>
@@ -98,12 +98,14 @@
         <button id="stopSpeakBtn" class="btn ghost">Stop</button>
         <button id="generateVoiceBtn" class="btn primary">Generate narration</button>
         <span id="generateVoiceStatus" class="status"></span>
+        <div id="generateVoiceProgress" class="progress-bar hidden"><div id="generateVoiceProgressFill"></div></div>
         <p class="hint">
-          "Quick preview" plays an approximate version through this device's own voice, instantly
-          and for free. "Generate narration" calls Google Cloud Text-to-Speech to render the actual
-          selected voice as a real audio file — this works on any device or browser, and the result
-          can be mixed with music and exported. It requires a Supabein connection (see Settings)
-          since the request is proxied server-side to keep the API key private.
+          "Quick preview" plays an approximate version through this device's own built-in voice,
+          instantly. "Generate narration" runs a real neural text-to-speech model
+          (<a href="https://github.com/rhasspy/piper" target="_blank" rel="noopener">Piper</a>)
+          entirely in this browser tab via WebAssembly — no server, no API key, works on any device.
+          The first time you use a given voice it downloads a one-time model file (~60MB) and caches
+          it in this browser for next time.
         </p>
       </div>
 
@@ -166,6 +168,7 @@
   <script src="js/supabein.js"></script>
   <script src="js/bible.js"></script>
   <script src="js/audio.js"></script>
+  <script type="module" src="js/piper.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

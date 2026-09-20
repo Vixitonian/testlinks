@@ -13,13 +13,14 @@ project so they show up in your library across devices.
   the free [bible-api.com](https://bible-api.com) (World English Bible,
   public domain).
 - **Two narration sources** — record your own voice via `MediaRecorder`, or
-  generate narration from a preloaded English voice using Google Cloud
-  Text-to-Speech, proxied server-side through Supabein so the API key never
-  reaches the browser. Both produce a real audio file that flows through the
-  same mix/export pipeline, and both work on any device or browser (no
-  microphone or screen-share permission needed for the voice option). A free
-  "Quick preview" using the device's own voice is also available for an
-  instant, zero-cost check before spending TTS quota.
+  generate narration from a preloaded English voice using
+  [Piper](https://github.com/rhasspy/piper), a neural text-to-speech model
+  that runs entirely inside the browser tab via WebAssembly/ONNX Runtime —
+  no server, no API key, no account, works offline after the one-time voice
+  model download. Both sources produce a real audio file that flows through
+  the same mix/export pipeline, and both work on any device or browser. A
+  free "Quick preview" using the device's own built-in voice is also
+  available for an instant check before running the neural model.
 - **Preview together** — before exporting, play the narration (recorded or
   device voice) mixed live with the background track at the chosen volumes,
   so you can judge the balance without waiting for a full MP3 encode.
@@ -85,31 +86,23 @@ token you provide in Settings rather than a public anon key.
 Uploaded audio files are stored in the `hagah-audio` bucket and served
 publicly at `https://supabein.dxinnovationhub.com/api/v1/storage/<project_id>/hagah-audio/<filename>`.
 
-### Preloaded-voice narration (Google Cloud Text-to-Speech)
+### Preloaded-voice narration (local Piper neural TTS)
 
-"Generate narration" calls a Supabein **integration** named `google-tts`,
-which proxies the request to Google Cloud's `text:synthesize` endpoint
-server-side — the API key is stored as a locked secret and is never sent to
-the browser. It's registered once per project:
+"Generate narration" uses [`@diffusionstudio/vits-web`](https://github.com/diffusion-studio/vits-web),
+which runs a Piper (VITS) voice model fully client-side via WebAssembly and
+ONNX Runtime Web — no Supabein connection, server, or API key required for
+this feature at all (Supabein is only used for the optional "Save to
+library" step). `js/piper.js` is a small ES module bridge (loaded with
+`<script type="module">`) that exposes `window.PiperTTS` for the rest of the
+app's classic scripts to call.
 
-```bash
-curl -X POST "https://supabein.dxinnovationhub.com/api/v1/projects/<project_id>/integrations" \
-  -H "Authorization: Bearer <your PAT>" -H "Content-Type: application/json" \
-  -d '{
-    "name": "google-tts",
-    "base_url": "https://texttospeech.googleapis.com/v1/",
-    "secret": "<your Google Cloud API key>",
-    "auth_style": "query:key"
-  }'
-```
-
-The app then calls `POST /projects/<project_id>/integrations/google-tts/proxy`
-with `{"method":"POST","path":"text:synthesize","body":{...}}`, and Supabein
-appends `?key=<secret>` before forwarding to Google. The response's
-`audioContent` (base64 MP3) is decoded client-side into a `Blob`, just like a
-microphone recording. Voices are currently limited to a curated English-only
-list in `js/voices.js`; other languages can be added by extending that list
-with any [Google Cloud TTS voice name](https://cloud.google.com/text-to-speech/docs/voices).
+The first time a given voice is used, its ONNX model (~60MB, hosted on
+Hugging Face) downloads and is cached in the browser's Origin Private File
+System — instant on every use after that, and it works offline once cached.
+Voices are currently limited to a curated English-only list in
+`js/voices.js`; more (including other languages) can be added from Piper's
+[full voice catalog](https://github.com/rhasspy/piper/blob/master/VOICES.md)
+by adding entries with the matching voice ID.
 
 ## Project structure
 
@@ -119,10 +112,11 @@ hagah-app/
 ├── css/style.css
 ├── js/
 │   ├── books.js      # static list of Bible books + chapter counts
-│   ├── voices.js      # curated English Google Cloud TTS voice list
+│   ├── voices.js      # curated English Piper voice IDs
 │   ├── bible.js        # bible-api.com client
-│   ├── supabein.js      # Supabein REST client (data, storage, TTS proxy)
+│   ├── supabein.js      # Supabein REST client (data + storage only)
 │   ├── audio.js          # local preview, mic recording, mixing, MP3 encode
-│   └── app.js            # UI wiring
+│   ├── piper.js           # ES module bridge to local Piper neural TTS
+│   └── app.js              # UI wiring
 └── vendor/lame.min.js   # lamejs MP3 encoder (vendored, MIT licensed)
 ```

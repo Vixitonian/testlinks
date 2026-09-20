@@ -1,18 +1,13 @@
-// Curated English-only Google Cloud Text-to-Speech voices.
-// Standard voices are cheapest against the free tier (4M chars/mo);
-// Wavenet voices sound more natural but draw from a smaller free
-// allowance (1M chars/mo). Both are offered so the choice is explicit.
+// Curated English-only Piper (VITS) neural voices, run entirely in the
+// browser via WebAssembly/ONNX — see js/piper.js. All are "medium" quality
+// (~60MB one-time download per voice, cached locally after) unless noted.
 const ENGLISH_VOICES = [
-  { name: "en-US-Standard-C", label: "US English — Standard (female)" },
-  { name: "en-US-Standard-D", label: "US English — Standard (male)" },
-  { name: "en-US-Wavenet-C", label: "US English — Wavenet (female)" },
-  { name: "en-US-Wavenet-D", label: "US English — Wavenet (male)" },
-  { name: "en-GB-Standard-A", label: "British English — Standard (female)" },
-  { name: "en-GB-Standard-B", label: "British English — Standard (male)" },
-  { name: "en-GB-Wavenet-A", label: "British English — Wavenet (female)" },
-  { name: "en-GB-Wavenet-B", label: "British English — Wavenet (male)" },
-  { name: "en-AU-Standard-A", label: "Australian English — Standard (female)" },
-  { name: "en-AU-Wavenet-B", label: "Australian English — Wavenet (male)" },
-  { name: "en-IN-Standard-A", label: "Indian English — Standard (female)" },
-  { name: "en-IN-Wavenet-B", label: "Indian English — Wavenet (male)" },
+  { id: "en_US-lessac-medium", label: "US English — Lessac (male)" },
+  { id: "en_US-amy-medium", label: "US English — Amy (female)" },
+  { id: "en_US-hfc_female-medium", label: "US English — HFC (female)" },
+  { id: "en_US-hfc_male-medium", label: "US English — HFC (male)" },
+  { id: "en_US-ryan-medium", label: "US English — Ryan (male)" },
+  { id: "en_GB-alan-medium", label: "British English — Alan (male)" },
+  { id: "en_GB-jenny_dioco-medium", label: "British English — Jenny (female)" },
+  { id: "en_GB-southern_english_female-low", label: "British English — Southern (female, smaller download)" },
 ];

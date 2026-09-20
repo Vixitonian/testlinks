@@ -30,6 +30,8 @@
   const stopSpeakBtn = $("stopSpeakBtn");
   const generateVoiceBtn = $("generateVoiceBtn");
   const generateVoiceStatus = $("generateVoiceStatus");
+  const generateVoiceProgress = $("generateVoiceProgress");
+  const generateVoiceProgressFill = $("generateVoiceProgressFill");
 
   const recordBtn = $("recordBtn");
   const stopRecordBtn = $("stopRecordBtn");
@@ -153,19 +155,20 @@
     }
   });
 
-  // ---- Voice list (English-only Google Cloud TTS voices) ----
+  // ---- Voice list (English-only local Piper neural voices) ----
   function populateVoices() {
     voiceSelect.innerHTML = "";
     ENGLISH_VOICES.forEach((v) => {
       const opt = document.createElement("option");
-      opt.value = v.name;
+      opt.value = v.id;
       opt.textContent = v.label;
       voiceSelect.appendChild(opt);
     });
   }
 
-  // Free, instant, approximate preview using this device's own voice — the
-  // real selected Google voice is only heard once "Generate narration" runs.
+  // Free, instant, approximate preview using this device's own built-in
+  // voice — the real selected Piper voice is only heard once "Generate
+  // narration" runs (which needs to load/run the actual neural model).
   speakBtn.addEventListener("click", () => {
     if (!currentVerse) return alert("Load a verse first.");
     HagahAudio.speak(currentVerse.text, { rate: Number(rateRange.value) });
@@ -193,15 +196,20 @@
 
   generateVoiceBtn.addEventListener("click", async () => {
     if (!currentVerse) return alert("Load a verse first.");
-    if (!Supabein.isConfigured()) {
-      return alert("Connect to Supabein in Settings first — narration generation is proxied through your project.");
+    if (!window.PiperTTS) {
+      return alert("The narration engine is still loading — wait a moment and try again.");
     }
     generateVoiceBtn.disabled = true;
-    generateVoiceStatus.textContent = "Generating narration...";
+    generateVoiceStatus.textContent = "Loading voice model...";
+    generateVoiceProgress.classList.remove("hidden");
+    generateVoiceProgressFill.style.width = "0%";
     try {
-      const blob = await Supabein.synthesizeSpeech(currentVerse.text, {
-        voiceName: voiceSelect.value,
-        speakingRate: Number(rateRange.value),
+      const blob = await window.PiperTTS.predict(currentVerse.text, voiceSelect.value, (progress) => {
+        if (progress.total) {
+          const pct = Math.round((progress.loaded * 100) / progress.total);
+          generateVoiceProgressFill.style.width = `${pct}%`;
+          generateVoiceStatus.textContent = pct < 100 ? `Downloading voice model... ${pct}%` : "Synthesizing...";
+        }
       });
       setNarration(blob, generateVoiceStatus, "Narration generated.");
     } catch (err) {
@@ -209,6 +217,7 @@
       console.error(err);
     } finally {
       generateVoiceBtn.disabled = false;
+      generateVoiceProgress.classList.add("hidden");
     }
   });
 
