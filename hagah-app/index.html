@@ -60,8 +60,7 @@
 
       <div id="currentAudioBlock" class="subsection hidden">
         <p class="hint">Current recording</p>
-        <audio id="currentAudioPlayer" controls></audio>
-        <label class="loop-label"><input type="checkbox" id="currentAudioLoop" /> Loop</label>
+        <button id="playCurrentBtn" class="btn">▶ Play</button>
       </div>
 
       <div class="subsection">
@@ -119,6 +118,17 @@
       <p id="saveHint" class="hint">Add a verse and narrate it to enable saving.</p>
     </section>
   </main>
+
+  <!-- ============ NOW PLAYING (persists across views; audio keeps playing while backgrounded) ============ -->
+  <div id="nowPlayingBar" class="now-playing hidden">
+    <p id="nowPlayingTitle" class="now-playing-title"></p>
+    <div class="now-playing-controls">
+      <button id="playPauseBtn" class="icon-btn" aria-label="Play or pause">▶</button>
+      <label class="loop-label inline"><input type="checkbox" id="loopToggle" /> Loop</label>
+      <button id="closePlayerBtn" class="icon-btn" aria-label="Close player">✕</button>
+    </div>
+  </div>
+  <audio id="sharedPlayer" preload="none"></audio>
 
   <script src="vendor/lame.min.js"></script>
   <script src="js/books.js"></script>

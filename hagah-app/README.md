@@ -25,8 +25,14 @@ to build a passage, narrate it, and save it — no build step, no frameworks.
   (`OfflineAudioContext`).
 - **Preview** — hear your recorded narration mixed live with the
   background track at the chosen volumes before saving.
-- **Loop** — when viewing a saved creation, a Loop toggle repeats its
-  playback for meditative listening.
+- **Play & loop from the list** — each saved creation has its own play/pause
+  button right in the list (no need to open it), plus a persistent
+  mini-player at the bottom of the screen with a Loop toggle for repeated,
+  meditative listening. Playback keeps going as you navigate between the
+  list and the edit screen. The mini-player also registers with the
+  [Media Session API](https://developer.mozilla.org/en-US/docs/Web/API/Media_Session_API),
+  so on mobile it shows lock-screen/notification controls and keeps
+  playing when you background the app or lock the screen.
 - **Editing** — reopening a saved creation lets you edit its verse list and
   save just that change (no audio touched), or record fresh narration to
   replace the saved audio entirely (old file is deleted from storage).

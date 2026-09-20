@@ -22,8 +22,7 @@
   const combinedTextEl = $("combinedText");
 
   const currentAudioBlock = $("currentAudioBlock");
-  const currentAudioPlayer = $("currentAudioPlayer");
-  const currentAudioLoop = $("currentAudioLoop");
+  const playCurrentBtn = $("playCurrentBtn");
 
   const voiceSelect = $("voiceSelect");
   const rateRange = $("rateRange");
@@ -48,12 +47,95 @@
   const saveStatus = $("saveStatus");
   const saveHint = $("saveHint");
 
+  const nowPlayingBar = $("nowPlayingBar");
+  const nowPlayingTitle = $("nowPlayingTitle");
+  const playPauseBtn = $("playPauseBtn");
+  const loopToggle = $("loopToggle");
+  const closePlayerBtn = $("closePlayerBtn");
+  const sharedPlayer = $("sharedPlayer");
+
   const DEFAULT_MUSIC_URL = "assets/meditation-bg.mp3";
 
   // ---- State ----
   let verseList = []; // { book, chapter, verseStart, verseEnd, reference, text }
   let narrationBlob = null;
   let editingRow = null; // the saved row being edited, or null when creating new
+  let playingId = null; // id of the note currently loaded into sharedPlayer
+
+  // ---- Shared player: plays saved creations, keeps going while backgrounded ----
+  // A single top-level <audio> element (outside both views) plus the Media
+  // Session API means playback survives switching between List/Edit, and on
+  // mobile keeps running with lock-screen controls when the app is
+  // backgrounded or the screen locks.
+  function syncRowIcons() {
+    document.querySelectorAll(".row-play-btn").forEach((btn) => {
+      const isThis = btn.dataset.id === String(playingId) && !sharedPlayer.paused;
+      btn.textContent = isThis ? "⏸" : "▶";
+      btn.classList.toggle("playing", isThis);
+    });
+  }
+
+  function updateNowPlayingBar() {
+    if (!playingId) {
+      nowPlayingBar.classList.add("hidden");
+      document.body.classList.remove("player-active");
+      return;
+    }
+    nowPlayingBar.classList.remove("hidden");
+    document.body.classList.add("player-active");
+    playPauseBtn.textContent = sharedPlayer.paused ? "▶" : "⏸";
+  }
+
+  function safePlay() {
+    // play() returns a promise that rejects if interrupted by a near-simultaneous
+    // pause() — a normal occurrence with quick clicks, not a real error.
+    sharedPlayer.play().catch(() => {});
+  }
+
+  function playRow(row) {
+    if (playingId === row.id) {
+      sharedPlayer.paused ? safePlay() : sharedPlayer.pause();
+      return;
+    }
+    playingId = row.id;
+    nowPlayingTitle.textContent = row.verse_ref;
+    sharedPlayer.src = row.audio_url;
+    sharedPlayer.loop = loopToggle.checked;
+    safePlay();
+
+    if ("mediaSession" in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({ title: row.verse_ref, artist: "Hagah" });
+      navigator.mediaSession.setActionHandler("play", safePlay);
+      navigator.mediaSession.setActionHandler("pause", () => sharedPlayer.pause());
+      navigator.mediaSession.setActionHandler("stop", () => closePlayer());
+    }
+  }
+
+  function closePlayer() {
+    sharedPlayer.pause();
+    sharedPlayer.removeAttribute("src");
+    playingId = null;
+    syncRowIcons();
+    updateNowPlayingBar();
+  }
+
+  ["play", "pause"].forEach((evt) => {
+    sharedPlayer.addEventListener(evt, () => {
+      syncRowIcons();
+      updateNowPlayingBar();
+    });
+  });
+  sharedPlayer.addEventListener("ended", () => {
+    if (!sharedPlayer.loop) closePlayer();
+  });
+
+  playPauseBtn.addEventListener("click", () => {
+    sharedPlayer.paused ? safePlay() : sharedPlayer.pause();
+  });
+  loopToggle.addEventListener("change", () => {
+    sharedPlayer.loop = loopToggle.checked;
+  });
+  closePlayerBtn.addEventListener("click", closePlayer);
 
   // ---- Navigation ----
   function showList() {
@@ -80,9 +162,6 @@
       editTitle.textContent = "Edit creation";
       deleteNoteBtn.classList.remove("hidden");
       currentAudioBlock.classList.remove("hidden");
-      currentAudioPlayer.src = row.audio_url;
-      currentAudioLoop.checked = false;
-      currentAudioPlayer.loop = false;
       const refs = (row.verses_json || []).length ? row.verses_json : null;
       const texts = (row.verse_text || "").split("\n\n");
       if (refs) {
@@ -101,7 +180,6 @@
       editTitle.textContent = "New creation";
       deleteNoteBtn.classList.add("hidden");
       currentAudioBlock.classList.add("hidden");
-      currentAudioPlayer.src = "";
     }
 
     renderVerseList();
@@ -298,8 +376,8 @@
 
   stopPreviewBtn.addEventListener("click", () => HagahAudio.stopPreview());
 
-  currentAudioLoop.addEventListener("change", () => {
-    currentAudioPlayer.loop = currentAudioLoop.checked;
+  playCurrentBtn.addEventListener("click", () => {
+    if (editingRow) playRow(editingRow);
   });
 
   // ---- Save ----
@@ -307,6 +385,7 @@
     if (!verseList.length) return;
     if (!narrationBlob && !editingRow) return;
     HagahAudio.stopPreview();
+    if (editingRow && narrationBlob && playingId === editingRow.id) closePlayer();
     saveBtn.disabled = true;
     const reference = combinedReference();
     const metadata = {
@@ -374,6 +453,7 @@
   deleteNoteBtn.addEventListener("click", async () => {
     if (!editingRow) return;
     if (!confirm("Delete this creation? This can't be undone.")) return;
+    if (playingId === editingRow.id) closePlayer();
     try {
       const filename = editingRow.audio_url.split("/").pop();
       await Supabein.deleteRecording(editingRow.id);
@@ -403,9 +483,22 @@
       }
       listHint.classList.add("hidden");
       data.forEach((row) => {
-        const el = document.createElement("button");
+        const el = document.createElement("div");
         el.className = "note-row";
-        el.type = "button";
+        el.tabIndex = 0;
+        el.setAttribute("role", "button");
+
+        const playBtn = document.createElement("button");
+        playBtn.type = "button";
+        playBtn.className = "row-play-btn";
+        playBtn.dataset.id = row.id;
+        playBtn.textContent = "▶";
+        playBtn.setAttribute("aria-label", "Play");
+        playBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          playRow(row);
+        });
+
         const main = document.createElement("div");
         main.className = "note-main";
         const title = document.createElement("p");
@@ -415,13 +508,16 @@
         meta.className = "note-meta";
         meta.textContent = new Date(row.created_at).toLocaleString();
         main.append(title, meta);
+
         const chevron = document.createElement("span");
         chevron.className = "chevron";
         chevron.textContent = "›";
-        el.append(main, chevron);
+
+        el.append(playBtn, main, chevron);
         el.addEventListener("click", () => showEditor(row));
         notesList.appendChild(el);
       });
+      syncRowIcons();
     } catch (err) {
       listHint.textContent = `Failed to load: ${err.message}`;
       listHint.classList.remove("hidden");
