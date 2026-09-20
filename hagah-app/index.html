@@ -69,9 +69,21 @@
     </section>
 
     <section class="panel">
-      <h2>2. Listen or record</h2>
-      <div class="subsection">
-        <h3>Preview with a device voice</h3>
+      <h2>2. Choose your narration</h2>
+      <div class="form-row inline narration-source">
+        <label class="radio-label"><input type="radio" name="narrationSource" value="mic" checked /> Record my own voice</label>
+        <label class="radio-label"><input type="radio" name="narrationSource" value="voice" /> Use a preloaded voice</label>
+      </div>
+
+      <div id="micSource" class="subsection">
+        <h3>Record your voice</h3>
+        <button id="recordBtn" class="btn primary">● Record</button>
+        <button id="stopRecordBtn" class="btn ghost" disabled>Stop</button>
+        <span id="recordStatus" class="status"></span>
+      </div>
+
+      <div id="voiceSource" class="subsection hidden">
+        <h3>Preloaded voice</h3>
         <div class="form-row inline">
           <div>
             <label for="voiceSelect">Voice</label>
@@ -82,18 +94,20 @@
             <input id="rateRange" type="range" min="0.5" max="1.5" step="0.05" value="1" />
           </div>
         </div>
-        <button id="speakBtn" class="btn">Speak verse</button>
+        <button id="speakBtn" class="btn">▶ Just listen</button>
         <button id="stopSpeakBtn" class="btn ghost">Stop</button>
-        <p class="hint">Speech preview plays through your speakers only — it can't be exported. Record your own voice below to create an MP3.</p>
+        <button id="generateVoiceBtn" class="btn primary">Use this voice as narration</button>
+        <span id="generateVoiceStatus" class="status"></span>
+        <p class="hint">
+          "Use this voice as narration" records the spoken verse into an audio file so it can be
+          mixed with music and exported, the same as your own recording. Your browser will ask you
+          to share <strong>this tab's audio</strong> — pick "This Tab" and make sure "Share tab audio"
+          is checked. This needs a Chromium-based browser (Chrome, Edge, Brave); it isn't supported
+          everywhere, in which case recording your own voice above still works.
+        </p>
       </div>
 
-      <div class="subsection">
-        <h3>Record your voice</h3>
-        <button id="recordBtn" class="btn primary">● Record</button>
-        <button id="stopRecordBtn" class="btn ghost" disabled>Stop</button>
-        <span id="recordStatus" class="status"></span>
-        <audio id="narrationPlayer" controls class="hidden"></audio>
-      </div>
+      <audio id="narrationPlayer" controls class="hidden"></audio>
 
       <div class="subsection">
         <h3>3. Add background music (optional)</h3>
@@ -114,9 +128,22 @@
       </div>
 
       <div class="subsection">
-        <h3>4. Export</h3>
+        <h3>4. Preview together</h3>
+        <button id="previewBtn" class="btn">▶ Preview verse + music</button>
+        <button id="stopPreviewBtn" class="btn ghost">Stop</button>
+        <p id="previewHint" class="hint">
+          Load a verse (and optionally a background track) above, then preview here.
+          If you've recorded your voice, the preview plays your actual recording mixed
+          live at the volumes set above. Otherwise it plays the device-voice preview
+          alongside the music so you can judge the balance before recording.
+        </p>
+      </div>
+
+      <div class="subsection">
+        <h3>5. Export</h3>
         <button id="exportBtn" class="btn primary" disabled>Mix &amp; export MP3</button>
         <span id="exportStatus" class="status"></span>
+        <p id="exportHint" class="hint">Record your voice above to enable export.</p>
         <div id="exportResult" class="hidden">
           <audio id="mixPlayer" controls></audio>
           <a id="downloadLink" class="btn" download>Download MP3</a>

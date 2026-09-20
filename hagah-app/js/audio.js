@@ -33,6 +33,74 @@ const HagahAudio = (() => {
     speechSynthesis.cancel();
   }
 
+  // ---- Live preview: hear narration + background music together before exporting ----
+  let previewSources = [];
+  let previewMusicEl = null;
+
+  function stopPreview() {
+    speechSynthesis.cancel();
+    previewSources.forEach((n) => {
+      try {
+        n.stop();
+      } catch {
+        /* already stopped */
+      }
+    });
+    previewSources = [];
+    if (previewMusicEl) {
+      previewMusicEl.pause();
+      URL.revokeObjectURL(previewMusicEl.src);
+      previewMusicEl = null;
+    }
+  }
+
+  // Real preview of the actual recorded narration mixed live with the music file,
+  // at the same volumes that will be used for export.
+  async function previewRecordedMix(narrationBlob, musicFile, { narrationGain = 1, musicGain = 0.25 } = {}) {
+    stopPreview();
+    await ctx().resume();
+    const narrationBuffer = await decodeBlob(narrationBlob);
+
+    const narrationSource = ctx().createBufferSource();
+    narrationSource.buffer = narrationBuffer;
+    const narrationNode = ctx().createGain();
+    narrationNode.gain.value = narrationGain;
+    narrationSource.connect(narrationNode).connect(ctx().destination);
+    narrationSource.start(0);
+    previewSources.push(narrationSource);
+
+    if (musicFile) {
+      const musicBuffer = await decodeBlob(musicFile);
+      const musicSource = ctx().createBufferSource();
+      musicSource.buffer = musicBuffer;
+      musicSource.loop = musicBuffer.duration < narrationBuffer.duration;
+      const musicNode = ctx().createGain();
+      musicNode.gain.value = musicGain;
+      musicSource.connect(musicNode).connect(ctx().destination);
+      musicSource.start(0);
+      musicSource.stop(ctx().currentTime + narrationBuffer.duration);
+      previewSources.push(musicSource);
+    }
+
+    narrationSource.onended = () => stopPreview();
+    return narrationBuffer.duration;
+  }
+
+  // Approximate preview using the device voice (Web Speech can't be routed into
+  // the Web Audio graph, so the music plays back separately alongside it).
+  function previewSpeechWithMusic(text, musicFile, { rate = 1, pitch = 1, voiceURI, musicGain = 0.25 } = {}) {
+    stopPreview();
+    if (musicFile) {
+      previewMusicEl = new Audio(URL.createObjectURL(musicFile));
+      previewMusicEl.loop = true;
+      previewMusicEl.volume = Math.min(1, Math.max(0, musicGain));
+      previewMusicEl.play().catch(() => {});
+    }
+    const utter = speak(text, { rate, pitch, voiceURI });
+    utter.onend = () => stopPreview();
+    utter.onerror = () => stopPreview();
+  }
+
   // ---- Microphone recording (the source used for MP3 export) ----
   let mediaRecorder = null;
   let recordedChunks = [];
@@ -64,6 +132,66 @@ const HagahAudio = (() => {
 
   function isRecording() {
     return Boolean(mediaRecorder && mediaRecorder.state === "recording");
+  }
+
+  // ---- Capture a preloaded (device) voice as a real, exportable recording ----
+  // SpeechSynthesis can't be piped into the Web Audio graph directly, but a
+  // Chromium tab-audio share (getDisplayMedia) can capture whatever the tab
+  // plays, including synthesized speech, as a genuine MediaStream to record.
+  function isTabAudioCaptureSupported() {
+    return Boolean(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+  }
+
+  let captureStream = null;
+  let captureRecorder = null;
+
+  function recordSpeechAsBlob(text, { rate = 1, pitch = 1, voiceURI } = {}) {
+    if (!isTabAudioCaptureSupported()) {
+      return Promise.reject(
+        new Error("This browser can't capture tab audio. Try Chrome/Edge, or record your own voice instead.")
+      );
+    }
+    return navigator.mediaDevices
+      .getDisplayMedia({ video: true, audio: true, preferCurrentTab: true, selfBrowserSurface: "include" })
+      .then((stream) => {
+        captureStream = stream;
+        const audioTracks = stream.getAudioTracks();
+        stream.getVideoTracks().forEach((t) => t.stop());
+        if (!audioTracks.length) {
+          stream.getTracks().forEach((t) => t.stop());
+          throw new Error('No tab audio was shared — choose "This Tab" and check "Share tab audio" when prompted.');
+        }
+        const audioOnlyStream = new MediaStream(audioTracks);
+        const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/ogg";
+        captureRecorder = new MediaRecorder(audioOnlyStream, { mimeType });
+        const chunks = [];
+        captureRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
+
+        return new Promise((resolve, reject) => {
+          captureRecorder.onstop = () => {
+            audioOnlyStream.getTracks().forEach((t) => t.stop());
+            resolve(new Blob(chunks, { type: captureRecorder.mimeType }));
+          };
+          captureRecorder.start();
+          // small lead-in so the recorder is fully live before speech starts
+          setTimeout(() => {
+            const utter = speak(text, { rate, pitch, voiceURI });
+            utter.onend = () => setTimeout(() => captureRecorder.state === "recording" && captureRecorder.stop(), 300);
+            utter.onerror = (e) => {
+              if (captureRecorder.state === "recording") captureRecorder.stop();
+              reject(new Error("Speech synthesis failed: " + e.error));
+            };
+          }, 250);
+        });
+      });
+  }
+
+  function cancelSpeechCapture() {
+    speechSynthesis.cancel();
+    if (captureRecorder && captureRecorder.state === "recording") captureRecorder.stop();
+    if (captureStream) captureStream.getTracks().forEach((t) => t.stop());
   }
 
   // ---- Decoding & mixing ----
@@ -116,6 +244,12 @@ const HagahAudio = (() => {
   }
 
   function encodeMp3(audioBuffer, kbps = 128) {
+    if (typeof lamejs === "undefined") {
+      throw new Error("MP3 encoder failed to load (vendor/lame.min.js). Check your connection and reload.");
+    }
+    if (!audioBuffer || audioBuffer.length === 0) {
+      throw new Error("Nothing to encode — the recording appears to be empty.");
+    }
     const channels = audioBuffer.numberOfChannels >= 2 ? 2 : 1;
     const sampleRate = audioBuffer.sampleRate;
     const encoder = new lamejs.Mp3Encoder(channels, sampleRate, kbps);
@@ -143,8 +277,14 @@ const HagahAudio = (() => {
     startRecording,
     stopRecording,
     isRecording,
+    isTabAudioCaptureSupported,
+    recordSpeechAsBlob,
+    cancelSpeechCapture,
     decodeBlob,
     mixNarrationWithMusic,
     encodeMp3,
+    previewRecordedMix,
+    previewSpeechWithMusic,
+    stopPreview,
   };
 })();

@@ -12,11 +12,16 @@ project so they show up in your library across devices.
 - **Verse picker** — book/chapter/verse selector; text is fetched live from
   the free [bible-api.com](https://bible-api.com) (World English Bible,
   public domain).
-- **Voice preview** — reads the verse aloud via the browser's built-in
-  Web Speech API (listening only; browsers don't expose this as an audio
-  file, so it isn't exportable).
-- **Record your voice** — captures real microphone audio via
-  `MediaRecorder` while you read the verse.
+- **Two narration sources** — record your own voice via `MediaRecorder`, or
+  use one of the browser's built-in text-to-speech voices. Since Web Speech
+  can't be piped into the Web Audio graph directly, "Use this voice as
+  narration" captures it into a real exportable file via a Chromium tab-audio
+  share (`getDisplayMedia`, "This Tab" + "Share tab audio") — needs Chrome,
+  Edge, or another Chromium-based browser; a quick "Just listen" preview
+  (no export) always works everywhere.
+- **Preview together** — before exporting, play the narration (recorded or
+  device voice) mixed live with the background track at the chosen volumes,
+  so you can judge the balance without waiting for a full MP3 encode.
 - **Background music** — pick any audio file from your device; it's mixed
   under your recording with independent volume control and an automatic
   fade-out, using the Web Audio API (`OfflineAudioContext`).

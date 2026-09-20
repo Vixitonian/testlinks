@@ -20,10 +20,16 @@
   const verseText = $("verseText");
   const verseTranslation = $("verseTranslation");
 
+  const narrationSourceRadios = document.getElementsByName("narrationSource");
+  const micSource = $("micSource");
+  const voiceSource = $("voiceSource");
+
   const voiceSelect = $("voiceSelect");
   const rateRange = $("rateRange");
   const speakBtn = $("speakBtn");
   const stopSpeakBtn = $("stopSpeakBtn");
+  const generateVoiceBtn = $("generateVoiceBtn");
+  const generateVoiceStatus = $("generateVoiceStatus");
 
   const recordBtn = $("recordBtn");
   const stopRecordBtn = $("stopRecordBtn");
@@ -34,8 +40,13 @@
   const narrationVolume = $("narrationVolume");
   const musicVolume = $("musicVolume");
 
+  const previewBtn = $("previewBtn");
+  const stopPreviewBtn = $("stopPreviewBtn");
+  const previewHint = $("previewHint");
+
   const exportBtn = $("exportBtn");
   const exportStatus = $("exportStatus");
+  const exportHint = $("exportHint");
   const exportResult = $("exportResult");
   const mixPlayer = $("mixPlayer");
   const downloadLink = $("downloadLink");
@@ -164,6 +175,42 @@
 
   stopSpeakBtn.addEventListener("click", () => HagahAudio.stopSpeaking());
 
+  // ---- Narration source toggle ----
+  function setNarrationSource(source) {
+    micSource.classList.toggle("hidden", source !== "mic");
+    voiceSource.classList.toggle("hidden", source !== "voice");
+  }
+  narrationSourceRadios.forEach((radio) => {
+    radio.addEventListener("change", (e) => setNarrationSource(e.target.value));
+  });
+
+  function setNarration(blob, statusEl, statusText) {
+    narrationBlob = blob;
+    narrationPlayer.src = URL.createObjectURL(blob);
+    narrationPlayer.classList.remove("hidden");
+    exportBtn.disabled = false;
+    exportHint.textContent = "Ready — this will mix in your background track (if any) and encode an MP3.";
+    if (statusEl) statusEl.textContent = statusText;
+  }
+
+  generateVoiceBtn.addEventListener("click", async () => {
+    if (!currentVerse) return alert("Load a verse first.");
+    generateVoiceBtn.disabled = true;
+    generateVoiceStatus.textContent = 'Choose "This Tab" and enable "Share tab audio" in the prompt...';
+    try {
+      const blob = await HagahAudio.recordSpeechAsBlob(currentVerse.text, {
+        rate: Number(rateRange.value),
+        voiceURI: voiceSelect.value,
+      });
+      setNarration(blob, generateVoiceStatus, "Narration captured from the preloaded voice.");
+    } catch (err) {
+      generateVoiceStatus.textContent = `Failed: ${err.message}`;
+      console.error(err);
+    } finally {
+      generateVoiceBtn.disabled = false;
+    }
+  });
+
   // ---- Recording ----
   recordBtn.addEventListener("click", async () => {
     if (!currentVerse) return alert("Load a verse first so you know what to read.");
@@ -178,25 +225,60 @@
   });
 
   stopRecordBtn.addEventListener("click", async () => {
-    narrationBlob = await HagahAudio.stopRecording();
+    const blob = await HagahAudio.stopRecording();
     recordBtn.disabled = false;
     stopRecordBtn.disabled = true;
-    recordStatus.textContent = "Recorded.";
-    narrationPlayer.src = URL.createObjectURL(narrationBlob);
-    narrationPlayer.classList.remove("hidden");
-    exportBtn.disabled = false;
+    setNarration(blob, recordStatus, "Recorded.");
   });
+
+  // ---- Preview: hear the verse + background music together before exporting ----
+  previewBtn.addEventListener("click", async () => {
+    const music = musicFile.files[0] || null;
+    try {
+      if (narrationBlob) {
+        previewHint.textContent = "Playing your recording mixed with the music...";
+        const duration = await HagahAudio.previewRecordedMix(narrationBlob, music, {
+          narrationGain: Number(narrationVolume.value),
+          musicGain: Number(musicVolume.value),
+        });
+        setTimeout(() => {
+          previewHint.textContent = "Preview finished. Adjust the volumes above and preview again, or export below.";
+        }, duration * 1000);
+      } else if (currentVerse) {
+        previewHint.textContent = "Playing an approximate preview (device voice + music can't be volume-mixed the same way a real recording can).";
+        HagahAudio.previewSpeechWithMusic(currentVerse.text, music, {
+          rate: Number(rateRange.value),
+          voiceURI: voiceSelect.value,
+          musicGain: Number(musicVolume.value),
+        });
+      } else {
+        alert("Load a verse first.");
+      }
+    } catch (err) {
+      previewHint.textContent = `Preview failed: ${err.message}`;
+      console.error(err);
+    }
+  });
+
+  stopPreviewBtn.addEventListener("click", () => HagahAudio.stopPreview());
 
   // ---- Export ----
   exportBtn.addEventListener("click", async () => {
     if (!narrationBlob) return alert("Record your voice first.");
+    HagahAudio.stopPreview();
     exportBtn.disabled = true;
     exportStatus.textContent = "Decoding audio...";
     try {
       const narrationBuffer = await HagahAudio.decodeBlob(narrationBlob);
       let musicBuffer = null;
       if (musicFile.files[0]) {
-        musicBuffer = await HagahAudio.decodeBlob(musicFile.files[0]);
+        try {
+          musicBuffer = await HagahAudio.decodeBlob(musicFile.files[0]);
+        } catch (musicErr) {
+          console.error("Background music failed to decode, exporting narration only:", musicErr);
+          exportStatus.textContent = "Couldn't read that music file — exporting your voice only...";
+          musicBuffer = null;
+        }
       }
       exportStatus.textContent = "Mixing...";
       const mixed = await HagahAudio.mixNarrationWithMusic(narrationBuffer, musicBuffer, {
@@ -213,6 +295,7 @@
       exportResult.classList.remove("hidden");
       exportStatus.textContent = "Done.";
     } catch (err) {
+      console.error("Export failed:", err);
       exportStatus.textContent = `Failed: ${err.message}`;
     } finally {
       exportBtn.disabled = false;
