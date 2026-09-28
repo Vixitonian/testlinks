@@ -13,14 +13,11 @@ to build a passage, narrate it, and save it — no build step, no frameworks.
   books, in any order; they're read as one combined passage. Text is
   fetched live from the free [bible-api.com](https://bible-api.com) (World
   English Bible, public domain).
-- **Two saveable narration sources** — record your own voice via
-  `MediaRecorder`, or generate narration from a preloaded English voice
-  using [Piper](https://github.com/rhasspy/piper), a neural TTS model that
-  runs entirely inside the browser tab via WebAssembly/ONNX Runtime — no
-  server, no API key, no account, works on any device (see below). A
-  "Listen" button using this device's own built-in voice is also available
-  for an instant free preview; that one can't be saved (browsers don't
-  expose it as an audio file).
+- **Listen first, then record** — an optional "Listen" button plays the
+  passage through this device's own built-in voice, purely so you can hear
+  it before reading it yourself. Browsers don't expose that voice as an
+  audio file, so it's preview-only; **recording your own voice** via
+  `MediaRecorder` is the only narration source that can be saved.
 - **Background music** — a bundled default meditation track
   (`assets/meditation-bg.mp3`, trimmed and re-encoded to ~1.4MB — see
   below), your own uploaded file, or none; mixed under your narration with
@@ -111,21 +108,6 @@ background track shorter than the narration, so 2 minutes is plenty; the
 trim was done locally with a decode → trim → re-encode pass through the
 same Web Audio + lamejs pipeline the app itself uses, not a separate tool.
 
-### Preloaded-voice narration (local Piper neural TTS)
-
-"Generate narration" uses [`@diffusionstudio/vits-web`](https://github.com/diffusion-studio/vits-web),
-which runs a Piper (VITS) voice model fully client-side via WebAssembly and
-ONNX Runtime Web — no server, API key, or account needed. `js/piper.js` is
-a small ES module bridge (loaded with `<script type="module">`) that
-exposes `window.PiperTTS` for the app's classic scripts to call.
-
-The first time a given voice is used, its ONNX model (~60MB, hosted on
-Hugging Face) downloads and is cached in the browser's Origin Private File
-System — instant on every use after that, and it works offline once
-cached. Voices are currently limited to a curated English-only list in
-`js/voices.js`; more (including other languages) can be added from
-Piper's [full voice catalog](https://github.com/rhasspy/piper/blob/master/VOICES.md).
-
 ## Project structure
 
 ```
@@ -135,12 +117,10 @@ hagah-app/
 ├── assets/meditation-bg.mp3   # default background track
 ├── js/
 │   ├── books.js      # static list of Bible books + chapter counts
-│   ├── voices.js       # curated English Piper voice IDs
 │   ├── config.example.js  # template — copy to config.js (gitignored)
 │   ├── bible.js        # bible-api.com client
 │   ├── supabein.js       # Supabein REST client (data + storage)
 │   ├── audio.js            # device-voice preview, mic recording, mixing, MP3 encode
-│   ├── piper.js              # ES module bridge to local Piper neural TTS
-│   └── app.js                  # UI wiring (List + Edit views)
+│   └── app.js                # UI wiring (List + Edit views)
 └── vendor/lame.min.js   # lamejs MP3 encoder (vendored, MIT licensed)
 ```

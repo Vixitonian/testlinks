@@ -34,12 +34,6 @@
   const recordStatus = $("recordStatus");
   const narrationPlayer = $("narrationPlayer");
 
-  const piperVoiceSelect = $("piperVoiceSelect");
-  const generateVoiceBtn = $("generateVoiceBtn");
-  const generateVoiceStatus = $("generateVoiceStatus");
-  const generateVoiceProgress = $("generateVoiceProgress");
-  const generateVoiceProgressFill = $("generateVoiceProgressFill");
-
   const musicChoice = $("musicChoice");
   const musicFile = $("musicFile");
   const narrationVolume = $("narrationVolume");
@@ -157,8 +151,6 @@
     narrationPlayer.src = "";
     narrationPlayer.classList.add("hidden");
     recordStatus.textContent = "";
-    generateVoiceStatus.textContent = "";
-    generateVoiceProgress.classList.add("hidden");
     musicChoice.value = "default";
     musicFile.value = "";
     musicFile.classList.add("hidden");
@@ -310,11 +302,11 @@
   stopSpeakBtn.addEventListener("click", () => HagahAudio.stopSpeaking());
 
   // ---- Recording ----
-  function setNarration(blob, statusEl, statusText) {
+  function setNarration(blob, statusText) {
     narrationBlob = blob;
     narrationPlayer.src = URL.createObjectURL(blob);
     narrationPlayer.classList.remove("hidden");
-    if (statusEl) statusEl.textContent = statusText;
+    recordStatus.textContent = statusText;
     updateSaveState();
   }
 
@@ -334,45 +326,7 @@
     const blob = await HagahAudio.stopRecording();
     recordBtn.disabled = false;
     stopRecordBtn.disabled = true;
-    setNarration(blob, recordStatus, "Recorded.");
-  });
-
-  // ---- Generate narration (Piper, local neural TTS) ----
-  function populatePiperVoices() {
-    piperVoiceSelect.innerHTML = "";
-    PIPER_VOICES.forEach((v) => {
-      const opt = document.createElement("option");
-      opt.value = v.id;
-      opt.textContent = v.label;
-      piperVoiceSelect.appendChild(opt);
-    });
-  }
-
-  generateVoiceBtn.addEventListener("click", async () => {
-    if (!verseList.length) return alert("Add at least one verse first.");
-    if (!window.PiperTTS) {
-      return alert("The narration engine is still loading — wait a moment and try again.");
-    }
-    generateVoiceBtn.disabled = true;
-    generateVoiceStatus.textContent = "Loading voice model...";
-    generateVoiceProgress.classList.remove("hidden");
-    generateVoiceProgressFill.style.width = "0%";
-    try {
-      const blob = await window.PiperTTS.predict(combinedText(), piperVoiceSelect.value, (progress) => {
-        if (progress.total) {
-          const pct = Math.round((progress.loaded * 100) / progress.total);
-          generateVoiceProgressFill.style.width = `${pct}%`;
-          generateVoiceStatus.textContent = pct < 100 ? `Downloading voice model... ${pct}%` : "Synthesizing...";
-        }
-      });
-      setNarration(blob, generateVoiceStatus, "Narration generated.");
-    } catch (err) {
-      generateVoiceStatus.textContent = `Failed: ${err.message}`;
-      console.error(err);
-    } finally {
-      generateVoiceBtn.disabled = false;
-      generateVoiceProgress.classList.add("hidden");
-    }
+    setNarration(blob, "Recorded.");
   });
 
   function updateSaveState() {
@@ -573,6 +527,5 @@
   // ---- Init ----
   populateBooks();
   populateVoices();
-  populatePiperVoices();
   loadNotes();
 })();
