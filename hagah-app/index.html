@@ -83,8 +83,24 @@
         <button id="recordBtn" class="btn primary">● Record my voice</button>
         <button id="stopRecordBtn" class="btn ghost" disabled>Stop</button>
         <span id="recordStatus" class="status"></span>
-        <audio id="narrationPlayer" controls class="hidden"></audio>
       </div>
+
+      <div class="subsection">
+        <p class="hint">Or, generate a narration instead of recording:</p>
+        <div class="form-row">
+          <label for="piperVoiceSelect">Voice</label>
+          <select id="piperVoiceSelect"></select>
+        </div>
+        <button id="generateVoiceBtn" class="btn primary">Generate narration</button>
+        <span id="generateVoiceStatus" class="status"></span>
+        <div id="generateVoiceProgress" class="progress-bar hidden"><div id="generateVoiceProgressFill"></div></div>
+        <p class="hint">
+          Runs a real neural voice (Piper) entirely in this browser — no server, no account,
+          works on any device. First use of a voice downloads it once (~60MB) and caches it here.
+        </p>
+      </div>
+
+      <audio id="narrationPlayer" controls class="hidden"></audio>
     </section>
 
     <section class="panel">
@@ -132,10 +148,12 @@
 
   <script src="vendor/lame.min.js"></script>
   <script src="js/books.js"></script>
+  <script src="js/voices.js"></script>
   <script src="js/config.js"></script>
   <script src="js/supabein.js"></script>
   <script src="js/bible.js"></script>
   <script src="js/audio.js"></script>
+  <script type="module" src="js/piper.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
