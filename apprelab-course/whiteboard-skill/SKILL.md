@@ -648,8 +648,8 @@ async function openPage(b){const p=await b.newPage({viewport:{width:OW,height:OH
  let vf='scale=trunc(iw/2)*2:trunc(ih/2)*2';
  if(caps){const T=s=>{const ms=Math.max(0,Math.round((s-t0)*1000));return`${String(ms/3600000|0).padStart(2,'0')}:${String(ms/60000%60|0).padStart(2,'0')}:${String(ms/1000%60|0).padStart(2,'0')},${String(ms%1000).padStart(3,'0')}`};
   const srt=beats.map((x,i)=>`${i+1}\n${T(x.start)} --> ${T(x.end)}\n${x.text}\n`).join('\n');fs.writeFileSync(dir+'/caps.srt',srt);vf+=`,subtitles=${dir}/caps.srt:force_style='FontSize=18,MarginV=24'`}
- const au=audio?`-ss ${t0} -t ${t1-t0} -i ${audio} -af apad -c:a aac -b:a 128k -shortest`:'';
- execSync(`ffmpeg -y -loglevel error -framerate ${fps} -i ${dir}/%06d.jpg ${au} -vf "${vf}" -c:v libx264 -preset medium -crf 20 -pix_fmt yuv420p -movflags +faststart ${out}`);
+ const au=audio?`-ss ${t0} -t ${t1-t0} -i ${audio} -af apad -c:a aac -b:a 128k`:'';
+ execSync(`ffmpeg -y -loglevel error -framerate ${fps} -i ${dir}/%06d.jpg ${au} -vf "${vf}" -c:v libx264 -preset medium -crf 20 -pix_fmt yuv420p -movflags +faststart -t ${(n/fps).toFixed(3)} ${out}`);
  fs.rmSync(dir,{recursive:true});console.log('wrote',out,n,'frames @',fps,'fps',OW+'x'+OH)})();
 ```
 
@@ -689,7 +689,7 @@ Narrated MP4: build with `AUDIO_SRC`/`TIMINGS`, then `node export.js page.html o
 | Scrub breaks after erase | Never mutate the DOM at runtime; visibility is a function of `t` |
 | Silent voice | Test voice button, volume, silent switch, open outside in-app previews |
 | Drawing outruns audio | Cut items, shorten labels, or add words; check `__overrun` |
-| Video stops before the last drawing finishes | Audio ended first and `-shortest` cut the video; `export.js` pads the audio with silence (`apad`) so the video runs its full length |
+| Video stops before the last drawing finishes | Audio ended first and cut the video; `export.js` pads the audio with silence (`apad`) and sets the output length to the frame count (`-t`), which also works with ffmpeg 7 |
 | MP4 text is a serif font | Font not embedded; run `embed_font.py` (section 6.1) and re-export |
 | No Mac worker answers | It is offline or not installed; `wait.sh` exits 2 after 3 minutes, then render in the sandbox |
 | Export takes forever / times out | Element screenshots and a single browser; use the v4 `export.js` (CDP + workers) in the background |
