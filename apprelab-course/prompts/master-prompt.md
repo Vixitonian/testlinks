@@ -1,6 +1,6 @@
 # MASTER PROMPT (self-contained): Script narration + whiteboard video
 
-**How to use:** Start a new chat. Attach two files: (1) the **source**, meaning whatever the narration is about (a course, a product or service, an app, an event, an idea or process to explain, a pitch, an announcement, a story or case study, or your own rough draft), and (2) the whiteboard `SKILL.md` (v4 or later). Paste everything below the line. If you know it, add one line saying the script type, the scripts you want and their lengths. Optionally add a Supabein TTS token on its own line (`Token: ...`) for a recorded voice.
+**How to use:** Start a new chat. Attach two files: (1) the **source**, meaning whatever the narration is about (a course, a product or service, an app, an event, an idea or process to explain, a pitch, an announcement, a story or case study, or your own rough draft), and (2) the whiteboard `SKILL.md` (v4 or later). Paste everything below the line. If you know it, add one line saying the script type, the scripts you want and their lengths. Optionally add a Supabein TTS token on its own line (`Token: ...`) for a recorded voice; its usage is documented at https://supabein.dxinnovationhub.com/tts/docs.
 
 ---
 
@@ -218,7 +218,7 @@ Start Phase B only when I name a script (for example "Do the promo first", "Do L
 3. **Narration.** Use my approved script text. Do not rewrite it unless a line fails the "read aloud" test, and say so if you change anything.
 4. **Beat sheet.** Split into beats of 22 to 35 words, one idea each, 3 to 7 drawn things per beat. Mark each beat organized or loose.
 5. **Assets.** Use any logo or photos I attach (embedded as data URIs, each under 300 KB). Otherwise use a handwritten wordmark. Never hotlink images.
-6. **Voice first.** Generate one clip per beat before drawing (skill section 7). With a Supabein token, pass it only as an environment variable for that one command; never write it to a file, the HTML, a log or the reply. No engine: browser speech in the HTML.
+6. **Voice first.** Generate one clip per beat before drawing (skill section 7). With a Supabein token, first read https://supabein.dxinnovationhub.com/tts/docs and follow it (endpoint, voice list, limits, errors); pick a voice that suits the audience from its voice list. Pass the token only as an environment variable for that one command; never write it to a file, the HTML, a log or the reply. No engine: browser speech in the HTML.
 7. **Build** from the template inside `SKILL.md` (it already contains the fast-rendering engine; keep it), set `TIMINGS` and `AUDIO_SRC`, and embed the handwriting font (skill section 6.1).
 8. **QA.** Run the skill's `qa.js`, view `contact_sheet.png`, confirm the handwriting font rendered, fix every issue, then run the skill's self-critique checklist.
 9. **Render the MP4** (skill sections 8.1 and 8.2), in this order:

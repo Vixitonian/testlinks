@@ -388,11 +388,14 @@ Query switches: `?theme=chalk|kraft|blueprint` (colors only), `?fmt=vertical` (1
 
 ## 7. Voice: pick the best available, never fake audio
 
-0. **Supabein TTS (preferred when the user gives a token).** Endpoint: `https://supabein.dxinnovationhub.com/tts/speak?token=TOKEN&text=TEXT` (`text` URL-encoded). Rules:
-   - **One call per beat** (22 to 35 words, about 200 characters). Never send a whole script in one URL: long URLs fail.
+0. **Supabein TTS (preferred when the user gives a token).** **Read the live docs first, every time:** `curl -s https://supabein.dxinnovationhub.com/tts/docs` (same text at `/tts/llms.txt`; both are public, no token). They are the authority on endpoints, parameters, limits, voices and errors, and they can change without notice: if they disagree with anything below or with `make_audio.py`, follow the docs and adapt the script. As last checked (October 2026) they say:
+   - `POST /tts/speak` with form fields `text` (1 to 5000 characters, plain text, no SSML), `voice` (optional, an exact name from `/tts/voices.json`, default `en-US-AriaNeural`) and `token`. Returns MP3 bytes. POST keeps the token and text out of URLs.
+   - Errors: 401 wrong or missing token (stop and ask the user), 400 empty or too-long text or unknown voice (fix the request), 500 the Microsoft service failed (wait, then retry).
+   - Pick the voice from `/tts/voices.json` (public): for a Nigerian audience `en-NG-EzinneNeural` (female) or `en-NG-AbeoNeural` (male); otherwise `en-US-AriaNeural`, `en-US-GuyNeural`, `en-GB-SoniaNeural`. Pass it with `SUPABEIN_VOICE=...` or `--voice`.
+   - Send one request at a time (shared hosting). Same text and voice are cached, so re-runs are instant. Speed and pitch cannot be changed, so write numbers and abbreviations as words.
+   - **One clip per beat** (22 to 35 words) so the drawing can be timed to each clip; the 5000-character limit is never the constraint.
    - **Token handling.** Pass it only as an environment variable for the one command: `SUPABEIN_TOKEN='...' python3 make_audio.py beats.json audio/ --engine supabein`. Never write it to a file, the HTML, `beats.json`, a QA report, a log or the reply. If an error message contains it, mask it. Tell the user to rotate or revoke the token afterwards if it was pasted in chat.
-   - **Network.** The sandbox usually blocks outside hosts. If the call fails with a network or `x-deny-reason` error, tell the user to allow `supabein.dxinnovationhub.com` in their network settings, then fall back to the timed script (item 4) or Mode A. Do not pretend audio exists.
-   - **Response.** The script accepts an audio file (mp3 or wav) or JSON with base64 audio or an audio URL, validates it with `ffprobe`, and converts it to mp3. If the service answers something else, show the user the status and first 200 characters of the reply (never the token) and stop.
+   - **Network.** If the docs or the call fail with a network or `x-deny-reason` error, tell the user to allow `supabein.dxinnovationhub.com` in their network settings, then fall back to the next engine, the timed script (item 4) or Mode A. Do not pretend audio exists.
    - **Pronunciation.** `make_audio.py` respells website names for the voice only (`Apprelab.com` is spoken as "Apprelab dot com"); captions keep the original text.
    - **Length.** A published page embeds the audio as a data URI. For anything over 5 minutes set `AUDIO_BITRATE=64k`; keep the file under about 10 MB.
 1. **Check once for other engines:** `python3 -c "import edge_tts"`; `which edge-tts piper espeak-ng`; try `pip install edge-tts --break-system-packages`. The sandbox has no network by default, so Edge TTS usually cannot run there; say so plainly.
@@ -412,7 +415,7 @@ Cascade for missing clips: supabein (only if env SUPABEIN_TOKEN is set) -> edge-
 Nothing available (usual in the sandbox: no network): writes narration_script.txt + narration.srt to paste into any
 external TTS, exits 3. --split: ONE long recording -> beat windows by silence detection (approximate).
 Success: narration.mp3 + timings.json ([{start,end,text}] -> paste into TIMINGS, set AUDIO_SRC)."""
-import json, os, re, shutil, subprocess, sys, base64, urllib.request, urllib.parse
+import json, os, re, shutil, subprocess, sys, time, urllib.request, urllib.parse, urllib.error
 BR = os.environ.get("AUDIO_BITRATE", "96k")   # use 64k for narrations over 5 minutes
 
 def sh(cmd, **k): return subprocess.run(cmd, capture_output=True, text=True, **k)
@@ -428,39 +431,38 @@ def speak(text):
     """Respell for the voice only (captions keep the original text): Apprelab.com -> Apprelab dot com."""
     return re.sub(r"\b([A-Za-z0-9-]+)\.(com|org|net|io|ng)\b", r"\1 dot \2", text)
 
-def supabein(text, path):
-    """GET <SUPABEIN_URL>?token=...&text=... ; token comes ONLY from env SUPABEIN_TOKEN and is masked in messages."""
+def supabein(text, path, voice=None):
+    """POST to the Supabein TTS API as its docs describe (https://supabein.dxinnovationhub.com/tts/docs).
+    Token comes ONLY from env SUPABEIN_TOKEN and is masked in every message. Voice: env SUPABEIN_VOICE, else --voice, else the API default."""
     tok = os.environ.get("SUPABEIN_TOKEN")
     if not tok: return False
-    base = os.environ.get("SUPABEIN_URL", "https://supabein.dxinnovationhub.com/tts/speak")
-    if len(text) > 1500: print("WARNING: beat is", len(text), "characters; split it into shorter beats")
-    url = base + "?" + urllib.parse.urlencode({"token": tok, "text": speak(text)})
+    url = os.environ.get("SUPABEIN_URL", "https://supabein.dxinnovationhub.com/tts/speak")
+    if len(text) > 5000: print("WARNING: beat is", len(text), "characters; the API limit is 5000, split it"); return False
+    form = {"text": speak(text), "token": tok}
+    v = os.environ.get("SUPABEIN_VOICE") or voice
+    if v: form["voice"] = v
     mask = lambda m: str(m).replace(tok, "***").replace(urllib.parse.quote(tok), "***")[:200]
-    def get(u):
-        with urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "whiteboard-skill"}), timeout=90) as r:
-            return r.read(), (r.headers.get("Content-Type") or "").lower()
-    for attempt in (1, 2):
+    for attempt in (1, 2, 3):
         try:
-            data, ct = get(url)
-            if "json" in ct or data[:1] in (b"{", b"["):
-                j = json.loads(data); j = j[0] if isinstance(j, list) and j else j
-                b64 = next((j[k] for k in ("audio_base64", "audio", "base64", "data") if isinstance(j, dict) and isinstance(j.get(k), str) and len(j[k]) > 200), None)
-                link = next((j[k] for k in ("audio_url", "url", "file") if isinstance(j, dict) and isinstance(j.get(k), str) and j[k].startswith("http")), None)
-                if b64: data = base64.b64decode(b64.split(",")[-1])
-                elif link: data, _ = get(link)
-                else: print("supabein: unexpected JSON keys:", mask(list(j)[:8] if isinstance(j, dict) else type(j))); return False
+            req = urllib.request.Request(url, data=urllib.parse.urlencode(form).encode(), headers={"User-Agent": "whiteboard-skill"})
+            with urllib.request.urlopen(req, timeout=90) as r: data = r.read()
             raw = path + ".raw"; open(raw, "wb").write(data)
-            ok = sh(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", raw]).returncode == 0 and len(data) > 500
+            ok = len(data) > 500 and sh(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", raw]).returncode == 0
             if ok: ok = sh(["ffmpeg", "-y", "-loglevel", "error", "-i", raw, "-ar", "44100", "-ac", "1", "-c:a", "libmp3lame", "-b:a", BR, path]).returncode == 0
             os.remove(raw)
             if ok and os.path.getsize(path) > 500: return True
-            print("supabein: reply was not playable audio. First bytes:", mask(data[:200]))
+            print("supabein: reply was not playable audio. First bytes:", mask(data[:200])); return False
+        except urllib.error.HTTPError as e:
+            body = mask(e.read()[:200])
+            if e.code == 401: print("supabein: 401, the token is wrong or missing. Ask the user for a valid token."); return False
+            if e.code == 400: print("supabein: 400, bad request (empty or too-long text, or unknown voice; check /tts/voices.json):", body); return False
+            print("supabein: HTTP %d (try %d): %s" % (e.code, attempt, body)); time.sleep(5 * attempt)
         except Exception as e:
-            print("supabein error (try %d):" % attempt, type(e).__name__, mask(e))
+            print("supabein error (try %d):" % attempt, type(e).__name__, mask(e)); time.sleep(5 * attempt)
     return False
 
 def synth(engine, text, voice, rate, path):
-    if engine == "supabein": return supabein(text, path)
+    if engine == "supabein": return supabein(text, path, voice if voice != "en-US-AriaNeural" else None)
     if engine == "edge":
         exe = [shutil.which("edge-tts")] if shutil.which("edge-tts") else [sys.executable, "-m", "edge_tts"]
         r = sh(exe + ["--voice", voice, "--rate", rate, "--text", text, "--write-media", path], timeout=90)
@@ -705,7 +707,7 @@ Narrated MP4: build with `AUDIO_SRC`/`TIMINGS`, then `node export.js page.html o
 - Recorded-audio mode was tested with synthetic audio (clock, timings, overrun report), not a real voice or Edge TTS output; `edge-tts` and `piper` paths follow their documented commands but could not run here (no network or install).
 - `--split` was tested on a synthetic recording with clear pauses; real speech with uneven pauses may need per-beat clips.
 - Chalk, kraft and blueprint are color swaps only. Vertical mode renders; scenes must be laid out with fractions of `W` and `H`.
-- The Supabein path was tested against a local mock server (audio reply and JSON reply), not the live service: its real response format, voices, rate limits and maximum text length are unconfirmed. Verify with one beat first.
+- The Supabein path has been used against the live service (October 2026). Its docs at `https://supabein.dxinnovationhub.com/tts/docs` are the authority: read them before each use, since endpoints, voices and limits can change.
 - Pacing and hand look were judged from screenshots and timing math, not from watching full playback.
 - Video export was measured in a 4-core container with no GPU: about 0.75 s per frame per worker with the boil filter. GPU or more cores change this a lot.
 
