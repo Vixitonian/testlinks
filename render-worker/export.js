@@ -1,4 +1,4 @@
-// usage: node export.js page.html out.mp4 [--fps 24] [--from 0] [--to END] [--audio narration.mp3] [--query "?fmt=vertical"] [--workers 4] [--width 1280] [--captions srt]
+// usage: node export.js page.html out.mp4 [--fast] [--fps 24] [--from 0] [--to END] [--audio narration.mp3] [--query "?fmt=vertical"] [--workers 4] [--width 1280] [--captions srt]
 // Frame-exact MP4 of the stage (controls hidden). Frames are split across parallel browsers and grabbed with
 // CDP captureScreenshot (about 0.5-0.8 s per frame per worker without a GPU). Audio must be a real file (Mode B).
 // No audio: pass --captions srt to burn the beat captions in (a silent video is still readable).
@@ -7,10 +7,12 @@ const {chromium}=require('playwright'),{execSync}=require('child_process'),fs=re
 const FF=process.env.FFMPEG||(()=>{try{return require('ffmpeg-static')||'ffmpeg'}catch(e){return 'ffmpeg'}})();
 const a=process.argv.slice(2),file=a[0],out=a[1],opt=k=>{const i=a.indexOf('--'+k);return i>0?a[i+1]:null};
 const fps=+(opt('fps')||24),qs=opt('query')||'',audio=opt('audio'),vert=qs.includes('vertical'),caps=opt('captions');
-const OW=+(opt('width')||(vert?720:1280)),OH=Math.round(OW*(vert?16/9:9/16)),NW=+(opt('workers')||Math.max(1,Math.min(4,os.cpus().length)));
+const FAST=a.includes('--fast');   // --fast: freeze the line wobble (boil filter), the most expensive part of each frame
+const OW=+(opt('width')||(vert?720:1280)),OH=Math.round(OW*(vert?16/9:9/16)),NW=+(opt('workers')||Math.max(1,Math.min(FAST?2:4,os.cpus().length)));
 async function openPage(b){const p=await b.newPage({viewport:{width:OW,height:OH}});await p.goto('file://'+path.resolve(file)+qs);await p.waitForTimeout(1500);
  await p.evaluate(([w,h])=>{document.querySelectorAll('.bar,#cap,#vstat,details').forEach(e=>e.style.display='none');document.querySelector('.wrap').style.cssText='max-width:none;margin:0;padding:0';
-  Object.assign(document.getElementById('stage').style,{width:w+'px',height:h+'px',borderRadius:'0',boxShadow:'none'});document.body.style.margin='0'},[OW,OH]);return p}
+  Object.assign(document.getElementById('stage').style,{width:w+'px',height:h+'px',borderRadius:'0',boxShadow:'none'});document.body.style.margin='0'},[OW,OH]);
+ if(FAST)await p.evaluate(()=>{const w=document.getElementById('world');if(w)w.removeAttribute('filter')});return p}
 (async()=>{const b=await chromium.launch({args:['--autoplay-policy=no-user-gesture-required']});
  const p0=await openPage(b),D=await p0.evaluate(()=>window.__duration),beats=await p0.evaluate(()=>window.__beats()),t0=+(opt('from')||0),t1=+(opt('to')||D),n=Math.round((t1-t0)*fps);
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'frames_'));let done=0,last=Date.now();

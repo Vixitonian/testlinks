@@ -55,6 +55,8 @@ If you'd rather use Homebrew or the GitHub CLI later, they work too: `brew insta
 | Stop it | `launchctl bootout gui/$(id -u)/com.apprelab.render-worker` |
 | Start it again | `./render-worker/install.sh` |
 | Log says GitHub refused the push | `git config --global credential.helper osxkeychain`, then `git push --dry-run origin HEAD:refs/heads/<branch>` in the clone and enter your username and token |
+| See render progress | `tail -f ~/Library/Caches/apprelab-render/last.log` |
+| Stop the current render (it reports an error and moves on) | `pkill -f export.js` |
 | Watch only some branches | Put `<key>EnvironmentVariables</key><dict><key>BRANCH_GLOB</key><string>ccr-*</string></dict>` in the plist and rerun `install.sh` |
 
 A macOS notification appears when a render starts and when it finishes. The worker keeps the Mac awake only while it is rendering, so leave the Mac on (lid open, or plugged in with an external display) when you expect a job.
@@ -66,7 +68,7 @@ A macOS notification appears when a render starts and when it finishes. The work
 | `render-worker.sh` | your Mac (launchd) | Watches every branch for jobs, renders them, pushes results |
 | `install.sh` | you, once | Checks the tools, installs Playwright and Chromium, registers the launchd agent |
 | `export.js` | the worker | Renders frames in headless Chromium and joins them into an MP4 with the bundled ffmpeg (or `$FFMPEG` / ffmpeg on PATH) |
-| `submit.sh` | Claude | `submit.sh NAME page.html narration.mp3 [fps] [width]` posts a job and pushes it |
+| `submit.sh` | Claude | `[FAST=true] submit.sh NAME page.html narration.mp3 [fps] [width]` posts a job and pushes it (`FAST=true` freezes the line wobble for about 1.8x speed) |
 | `wait.sh` | Claude | `wait.sh NAME` waits for the claim and the MP4 (exit 0 done, 2 no worker, 3 error, 4 timeout) |
 
 ## Security notes

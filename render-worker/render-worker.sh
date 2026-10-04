@@ -57,16 +57,18 @@ render() {
   echo "Claimed by $(scutil --get ComputerName 2>/dev/null || hostname) at $(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "$jobdir/claimed.txt"
   push_back "$wt" "$branch" "Render worker: claim $name" "$job/claimed.txt" || { log "could not push claim"; return 1; }
 
-  spec="$(node -e 'const j=require(process.argv[1]);console.log([j.page||"page.html",j.audio||"",j.fps||24,j.width||1280,j.query||""].join("|"))' "$jobdir/job.json")" || spec="page.html||24|1280|"
-  IFS='|' read -r page audio fps width query <<< "$spec"
+  spec="$(node -e 'const j=require(process.argv[1]);console.log([j.page||"page.html",j.audio||"",j.fps||24,j.width||1280,j.query||"",j.fast?1:0,j.workers||""].join("|"))' "$jobdir/job.json")" || spec="page.html||24|1280||0|"
+  IFS='|' read -r page audio fps width query fast workers <<< "$spec"
   out="$jobdir/out.mp4"
   local args=("$jobdir/$page" "$out" --fps "$fps" --width "$width")
   [ -n "$audio" ] && args+=(--audio "$jobdir/$audio")
   [ -n "$query" ] && args+=(--query "$query")
+  [ "$fast" = "1" ] && args+=(--fast)
+  [ -n "$workers" ] && args+=(--workers "$workers")
 
   notify "Rendering $name"
   start=$(date +%s)
-  log "job $name: rendering ${fps} fps, ${width} px wide"
+  log "job $name: rendering ${fps} fps, ${width} px wide$([ "$fast" = 1 ] && echo ", fast mode")"
   if caffeinate -i node "$SCRIPT_DIR/export.js" "${args[@]}" > "$WORK/last.log" 2>&1 && [ -s "$out" ]; then
     log "job $name: rendered in $(( $(date +%s) - start )) s, pushing"
     push_back "$wt" "$branch" "Render worker: out.mp4 for $name" "$job/out.mp4" && notify "Done: $name" && log "job $name: done"

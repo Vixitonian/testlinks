@@ -578,7 +578,7 @@ which ffmpeg ffprobe node && NODE_PATH=$(npm root -g) node -e "require('playwrig
 
 **Speed.** Without a GPU, each frame costs about 0.5 to 0.8 s per worker (the `boil` filter is most of it). `export.js` uses CDP `captureScreenshot` (about 2x faster than element screenshots) and splits frames across up to 4 browsers. Measured: about 2 frames per second in total on 4 CPU cores (workers share the CPU, so they do not scale linearly), which is roughly 12 to 15 minutes of rendering per minute of video at 24 fps and 1280x720. Use `--fps 20` or a GPU machine to go faster. Always run it in the background and wait for completion; never block on a foreground timeout. Test a 2-second slice first (`--from 28 --to 30`) and extract a frame with `ffmpeg -ss 1 -i test.mp4 -frames:v 1 f.png` to check font, framing and hand before the full run.
 
-**Options.** `--width 1920` for 1080p (about 2x slower); `--fps 20` to save time; `--query "?fmt=vertical"` for 9:16 (720x1280 by default); `--captions srt` burns the beat captions in (use when there is no real audio, or for social video that autoplays muted).
+**Options.** `--fast` freezes the line wobble (the `boil` filter) and uses 2 browsers: measured 1.8x faster, and it looks almost the same (use it for drafts, long videos and laptops without a fan). `--width 1920` for 1080p (about 2x slower); `--fps 20` to save time; `--query "?fmt=vertical"` for 9:16 (720x1280 by default); `--captions srt` burns the beat captions in (use when there is no real audio, or for social video that autoplays muted).
 
 ### 8.2 Render on the user's Mac (optional worker, preferred when it is online)
 
@@ -624,17 +624,21 @@ s.save(sys.argv[1])`;fs.writeFileSync('/tmp/sheet.py',py);execSync(`python3 /tmp
 ```
 
 ```js
-// usage: node export.js page.html out.mp4 [--fps 24] [--from 0] [--to END] [--audio narration.mp3] [--query "?fmt=vertical"] [--workers 4] [--width 1280] [--captions srt]
+// usage: node export.js page.html out.mp4 [--fast] [--fps 24] [--from 0] [--to END] [--audio narration.mp3] [--query "?fmt=vertical"] [--workers 4] [--width 1280] [--captions srt]
 // Frame-exact MP4 of the stage (controls hidden). Frames are split across parallel browsers and grabbed with
 // CDP captureScreenshot (about 0.5-0.8 s per frame per worker without a GPU). Audio must be a real file (Mode B).
 // No audio: pass --captions srt to burn the beat captions in (a silent video is still readable).
 const {chromium}=require('playwright'),{execSync}=require('child_process'),fs=require('fs'),os=require('os'),path=require('path');
+// ffmpeg: $FFMPEG if set, else the ffmpeg-static npm package (no Homebrew needed), else ffmpeg on PATH.
+const FF=process.env.FFMPEG||(()=>{try{return require('ffmpeg-static')||'ffmpeg'}catch(e){return 'ffmpeg'}})();
 const a=process.argv.slice(2),file=a[0],out=a[1],opt=k=>{const i=a.indexOf('--'+k);return i>0?a[i+1]:null};
 const fps=+(opt('fps')||24),qs=opt('query')||'',audio=opt('audio'),vert=qs.includes('vertical'),caps=opt('captions');
-const OW=+(opt('width')||(vert?720:1280)),OH=Math.round(OW*(vert?16/9:9/16)),NW=+(opt('workers')||Math.max(1,Math.min(4,os.cpus().length)));
+const FAST=a.includes('--fast');   // --fast: freeze the line wobble (boil filter), the most expensive part of each frame
+const OW=+(opt('width')||(vert?720:1280)),OH=Math.round(OW*(vert?16/9:9/16)),NW=+(opt('workers')||Math.max(1,Math.min(FAST?2:4,os.cpus().length)));
 async function openPage(b){const p=await b.newPage({viewport:{width:OW,height:OH}});await p.goto('file://'+path.resolve(file)+qs);await p.waitForTimeout(1500);
  await p.evaluate(([w,h])=>{document.querySelectorAll('.bar,#cap,#vstat,details').forEach(e=>e.style.display='none');document.querySelector('.wrap').style.cssText='max-width:none;margin:0;padding:0';
-  Object.assign(document.getElementById('stage').style,{width:w+'px',height:h+'px',borderRadius:'0',boxShadow:'none'});document.body.style.margin='0'},[OW,OH]);return p}
+  Object.assign(document.getElementById('stage').style,{width:w+'px',height:h+'px',borderRadius:'0',boxShadow:'none'});document.body.style.margin='0'},[OW,OH]);
+ if(FAST)await p.evaluate(()=>{const w=document.getElementById('world');if(w)w.removeAttribute('filter')});return p}
 (async()=>{const b=await chromium.launch({args:['--autoplay-policy=no-user-gesture-required']});
  const p0=await openPage(b),D=await p0.evaluate(()=>window.__duration),beats=await p0.evaluate(()=>window.__beats()),t0=+(opt('from')||0),t1=+(opt('to')||D),n=Math.round((t1-t0)*fps);
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'frames_'));let done=0,last=Date.now();
@@ -649,7 +653,7 @@ async function openPage(b){const p=await b.newPage({viewport:{width:OW,height:OH
  if(caps){const T=s=>{const ms=Math.max(0,Math.round((s-t0)*1000));return`${String(ms/3600000|0).padStart(2,'0')}:${String(ms/60000%60|0).padStart(2,'0')}:${String(ms/1000%60|0).padStart(2,'0')},${String(ms%1000).padStart(3,'0')}`};
   const srt=beats.map((x,i)=>`${i+1}\n${T(x.start)} --> ${T(x.end)}\n${x.text}\n`).join('\n');fs.writeFileSync(dir+'/caps.srt',srt);vf+=`,subtitles=${dir}/caps.srt:force_style='FontSize=18,MarginV=24'`}
  const au=audio?`-ss ${t0} -t ${t1-t0} -i ${audio} -af apad -c:a aac -b:a 128k`:'';
- execSync(`ffmpeg -y -loglevel error -framerate ${fps} -i ${dir}/%06d.jpg ${au} -vf "${vf}" -c:v libx264 -preset medium -crf 20 -pix_fmt yuv420p -movflags +faststart -t ${(n/fps).toFixed(3)} ${out}`);
+ execSync(`"${FF}" -y -loglevel error -framerate ${fps} -i ${dir}/%06d.jpg ${au} -vf "${vf}" -c:v libx264 -preset medium -crf 20 -pix_fmt yuv420p -movflags +faststart -t ${(n/fps).toFixed(3)} ${out}`);
  fs.rmSync(dir,{recursive:true});console.log('wrote',out,n,'frames @',fps,'fps',OW+'x'+OH)})();
 ```
 
