@@ -21,6 +21,7 @@ BRANCH_GLOB="${BRANCH_GLOB:-*}"
 WORK="${WORK:-$HOME/Library/Caches/apprelab-render}"
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 export NODE_PATH="$SCRIPT_DIR/node_modules"
+export GIT_TERMINAL_PROMPT=0   # never hang on a password prompt; launchd has no terminal
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*"; }
 notify() { osascript -e "display notification \"$1\" with title \"Apprelab render\"" >/dev/null 2>&1 || true; }
@@ -31,7 +32,14 @@ push_back() {
   ( cd "$wt" && git add -f "$@" && git commit -q -m "$msg" ) || return 1
   local i
   for i in 1 2 3 4; do
-    ( cd "$wt" && git push -q origin "HEAD:refs/heads/$branch" ) && return 0
+    ( cd "$wt" && git push -q origin "HEAD:refs/heads/$branch" 2>"$WORK/push.err" ) && return 0
+    if grep -qiE "could not read Username|Authentication failed|403|Permission" "$WORK/push.err"; then
+      log "GitHub refused the push (no saved login, or the token lacks Contents: Read and write)."
+      log "Fix: in Terminal run  cd \"$REPO_DIR\" && git push --dry-run origin HEAD:refs/heads/$branch  and enter your username and token."
+      notify "GitHub login needed: see the worker log"
+      sleep 300; return 1
+    fi
+    cat "$WORK/push.err"
     log "push rejected (try $i), rebasing onto origin/$branch"
     ( cd "$wt" && git pull -q --rebase origin "$branch" ) || sleep $((i * 2))
   done

@@ -10,7 +10,11 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 command -v git >/dev/null && git --version >/dev/null 2>&1 || { echo "Missing git. Run: xcode-select --install  (then rerun this script)"; exit 1; }
 command -v node >/dev/null && command -v npm >/dev/null || { echo "Missing Node.js. Download the macOS installer (LTS) from https://nodejs.org, run it, then rerun this script"; exit 1; }
-git -C "$SCRIPT_DIR/.." ls-remote -q origin >/dev/null || { echo "This clone cannot reach GitHub. Sign in first (gh auth login, or an SSH key)."; exit 1; }
+git -C "$SCRIPT_DIR/.." ls-remote -q origin >/dev/null || { echo "This clone cannot reach GitHub. Check your internet connection."; exit 1; }
+BR="$(git -C "$SCRIPT_DIR/.." rev-parse --abbrev-ref HEAD)"
+echo "Checking that this Mac can push to GitHub (enter your GitHub username and token if asked)..."
+git config --global credential.helper >/dev/null || git config --global credential.helper osxkeychain
+git -C "$SCRIPT_DIR/.." push --dry-run -q origin "HEAD:refs/heads/$BR" || { echo "GitHub refused the push. Use your GitHub username and a token with Contents: Read and write as the password, then rerun this script."; exit 1; }
 
 echo "Installing Playwright, its Chromium and a bundled ffmpeg..."
 cd "$SCRIPT_DIR" && npm install --silent && npx playwright install chromium

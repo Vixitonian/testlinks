@@ -34,7 +34,7 @@ node -v && npm -v
 ```bash
 git clone -b ccr-cbf0e978-2gg7er https://github.com/vixitonian/testlinks.git ~/apprelab-render
 ```
-When git asks, use your GitHub username and paste the **token as the password**. macOS saves it in your Keychain, so the worker can push later without asking again.
+Cloning a public repo doesn't ask for a login, so `install.sh` checks push access next and asks for your GitHub username and the **token as the password**. macOS saves it in your Keychain, so the worker can push later without asking again.
 ```bash
 cd ~/apprelab-render
 git config user.name "Render worker"
@@ -54,6 +54,7 @@ If you'd rather use Homebrew or the GitHub CLI later, they work too: `brew insta
 | Watch what it's doing | `tail -f ~/Library/Logs/apprelab-render-worker.log` |
 | Stop it | `launchctl bootout gui/$(id -u)/com.apprelab.render-worker` |
 | Start it again | `./render-worker/install.sh` |
+| Log says GitHub refused the push | `git config --global credential.helper osxkeychain`, then `git push --dry-run origin HEAD:refs/heads/<branch>` in the clone and enter your username and token |
 | Watch only some branches | Put `<key>EnvironmentVariables</key><dict><key>BRANCH_GLOB</key><string>ccr-*</string></dict>` in the plist and rerun `install.sh` |
 
 A macOS notification appears when a render starts and when it finishes. The worker keeps the Mac awake only while it is rendering, so leave the Mac on (lid open, or plugged in with an external display) when you expect a job.
