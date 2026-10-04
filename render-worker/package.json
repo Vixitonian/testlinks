@@ -1,0 +1,8 @@
+{
+  "name": "apprelab-render-worker",
+  "private": true,
+  "description": "Renders whiteboard animation pages to MP4 on a Mac and pushes them back to the repo.",
+  "dependencies": {
+    "playwright": "^1.47.0"
+  }
+}

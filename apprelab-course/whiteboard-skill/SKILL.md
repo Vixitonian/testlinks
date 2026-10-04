@@ -580,6 +580,16 @@ which ffmpeg ffprobe node && NODE_PATH=$(npm root -g) node -e "require('playwrig
 
 **Options.** `--width 1920` for 1080p (about 2x slower); `--fps 20` to save time; `--query "?fmt=vertical"` for 9:16 (720x1280 by default); `--captions srt` burns the beat captions in (use when there is no real audio, or for social video that autoplays muted).
 
+### 8.2 Render on the user's Mac (optional worker, preferred when it is online)
+
+If the repo has a `render-worker/` folder, the user may run its worker on their Mac (see `render-worker/README.md`). It is much faster than the sandbox. Try it first:
+
+1. `render-worker/submit.sh <name> page.html audio/narration.mp3 24 1280` (a new, unique `<name>` each time; the page must already have the font embedded).
+2. Run `render-worker/wait.sh <name>` in the background (`run_in_background: true`); never block on it in the foreground.
+3. Exit 0: the MP4 is at `render-jobs/<name>/out.mp4`; check one frame, then deliver it. Exit 2 (no worker claimed it in 3 minutes): say so in one line and render in the sandbox with `export.js` as above. Exit 3: show the error lines, fix the page, post a new job. Exit 4: tell the user the Mac claimed the job but did not finish.
+
+The worker pushes to the branch the job was posted on, so pull before the next commit.
+
 **Report** duration, resolution, size and audio stream from `ffprobe` only after the export ran. The MP4 can be large for an artifact; send it as a file and publish the HTML.
 
 ```js
@@ -681,6 +691,7 @@ Narrated MP4: build with `AUDIO_SRC`/`TIMINGS`, then `node export.js page.html o
 | Drawing outruns audio | Cut items, shorten labels, or add words; check `__overrun` |
 | Video stops before the last drawing finishes | Audio ended first and `-shortest` cut the video; `export.js` pads the audio with silence (`apad`) so the video runs its full length |
 | MP4 text is a serif font | Font not embedded; run `embed_font.py` (section 6.1) and re-export |
+| No Mac worker answers | It is offline or not installed; `wait.sh` exits 2 after 3 minutes, then render in the sandbox |
 | Export takes forever / times out | Element screenshots and a single browser; use the v4 `export.js` (CDP + workers) in the background |
 
 ## 11. Known limits (state them when relevant)
