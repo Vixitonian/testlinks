@@ -1,0 +1,41 @@
+Render failed on USERs-MacBook-Air.local at 2026-10-04T22:12:05Z
+frames 300/1621
+frames 313/1621
+frames 328/1621
+frames 350/1621
+frames 370/1621
+frames 390/1621
+frames 414/1621
+frames 427/1621
+frames 456/1621
+frames 482/1621
+frames 510/1621
+frames 542/1621
+frames 575/1621
+frames 602/1621
+frames 637/1621
+frames 693/1621
+frames 713/1621
+frames 733/1621
+frames 759/1621
+frames 783/1621
+frames 814/1621
+frames 846/1621
+frames 883/1621
+frames 927/1621
+frames 970/1621
+frames 1005/1621
+frames 1037/1621
+frames 1076/1621
+frames 1108/1621
+node:internal/process/promises:394
+    triggerUncaughtException(err, true /* fromPromise */);
+    ^
+
+cdpSession.send: Target page, context or browser has been closed
+    at /Users/user/apprelab-render/render-worker/export.js:22:22
+    at async /Users/user/apprelab-render/render-worker/export.js:20:2 {
+  log: []
+}
+
+Node.js v24.21.0
