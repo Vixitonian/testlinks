@@ -585,7 +585,7 @@ which ffmpeg ffprobe node && NODE_PATH=$(npm root -g) node -e "require('playwrig
 
 If the repo has a `render-worker/` folder, the user may run its worker on their Mac (see `render-worker/README.md`). It is much faster than the sandbox. Try it first:
 
-1. `render-worker/submit.sh <name> page.html audio/narration.mp3 24 1280` (a new, unique `<name>` each time; the page must already have the font embedded).
+1. `FAST=true render-worker/submit.sh <name> page.html audio/narration.mp3 24 1280` (a new, unique `<name>` each time; the page must already have the font embedded). Fast mode is the default for the Mac worker: a MacBook Air rendered a 68-second video in about 2 minutes this way. Drop `FAST=true` only when the user asks for the line wobble.
 2. Run `render-worker/wait.sh <name>` in the background (`run_in_background: true`); never block on it in the foreground.
 3. Exit 0: the MP4 is at `render-jobs/<name>/out.mp4`; check one frame, then deliver it. Exit 2 (no worker claimed it in 3 minutes): say so in one line and render in the sandbox with `export.js` as above. Exit 3: show the error lines, fix the page, post a new job. Exit 4: tell the user the Mac claimed the job but did not finish.
 
