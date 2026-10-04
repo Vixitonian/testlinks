@@ -11,25 +11,27 @@ Section tags in square brackets are for reference only. They are **not spoken**.
 
 ## Marketing narration (about 1 minute)
 
-**End state:** the viewer wants to turn their skill into a course built around one real person's problem, and starts lesson one on Apprelab.com.
+**End state:** the viewer sees that a skill they already have is sitting idle and earning nothing, and starts lesson one on Apprelab.com to turn it into a paid course.
 
 [HOOK]
-Picture Kemi. She's an accountant. Last year she built a course called Accounting Basics. Forty slides. Three weeks of evenings. Nobody bought it.
+Picture Kemi. She's brilliant with numbers. Friends call her when their books are a mess. She fixes it for free, then goes back to work.
 
 [TENSION]
-Not because the teaching was bad. Because nobody saw themselves in it. Maybe that's you. Real skill, a course idea, and nobody asking for it.
+That skill is lying there, asleep. It earns nothing. Maybe you have one too. People already ask you for help, and you've never been paid for it.
 
 [TURN]
-People don't buy your skill. They buy a way out of their problem.
+Here's the shift. People don't pay for your skill. They pay for a way out of their problem.
 
 [BUILD]
-Pick one real person you could call today. Find the problem they already feel, in their own words. Then turn it into a result they can show you. Five short lessons, a task in every one.
+This course shows you how to find one real person, the problem they already feel, and a result they can show you.
+
+You'll finish with a course plan. Then paste it into Apprelab's Creator Studio. It drafts your lessons, quick checks and tasks.
 
 [PROOF]
-You finish with a title, a lesson plan and a clear promise. Paste it into the Creator Studio on Apprelab.com. Publish it free, or set a price and earn from every sale.
+Publish it free, or set a price and earn from every sale. Your skill finally goes to work.
 
 [ACTION]
-Stop teaching a topic. Start solving a problem. Go to Apprelab.com and start lesson one.
+Wake up your skill. Go to Apprelab.com and start lesson one.
 
 ---
 
@@ -440,14 +442,14 @@ Kemi started with a skill. She ended with a course Mama Nkechi asked to start. N
 | Real reference 1 | "People don't want a quarter-inch drill, they want a quarter-inch hole": attributed to Theodore Levitt (Harvard Business School). Phrased as "usually credited to", because Levitt himself credited it to Leo McGivena. Lesson 1. |
 | Real reference 2 | *The Mom Test* by Rob Fitzpatrick (2013): ask about past behaviour, not future opinions. Lesson 3. |
 | Platform claims (all from the course file) | Every Apprelab course ends with a real task and a verified badge; learners share badges on WhatsApp and LinkedIn; each badge links back to the course (Lesson 4). Creator Studio asks for one outcome, three to eight lessons and a task in every lesson; its AI course builder drafts lessons, quick checks and tasks from a pasted plan or notes; learners get instant AI feedback; publish free or set a price and earn from every sale (Marketing, Lesson 5). |
-| Spoken brand text | "Apprelab.com" (marketing twice, Lesson 5 once); "Apprelab" and "Creator Studio" elsewhere. Draw "Apprelab.com" large on every closing call to action. |
+| Spoken brand text | "Apprelab.com" (marketing once, Lesson 5 once); "Apprelab" and "Creator Studio" elsewhere. Draw "Apprelab.com" large on every closing call to action. |
 | Board text ideas | L1: "Skill ✗ / Problem ✓", "Who? Stuck? Have?". L2: "Role + Situation + Stake". L3: "Symptom vs Problem", "Last time · Tried · Cost". L4: "Show it", "Tools · Time · Money", "1–2 weeks". L5: "Person + Problem + Situation + Outcome", five-step lesson row. |
 
 ### Length per script
 
 | Script | Spoken words | Minutes at 2.4 words per second |
 |---|---|---|
-| Marketing | 144 | 1.0 |
+| Marketing | 142 | 1.0 |
 | Lesson 1 | 953 | 6.6 |
 | Lesson 2 | 938 | 6.5 |
 | Lesson 3 | 916 | 6.4 |
