@@ -1,6 +1,6 @@
-# MASTER PROMPT (self-contained): Course narration + whiteboard animation
+# MASTER PROMPT (self-contained): Course narration + whiteboard video
 
-**How to use:** Start a new chat. Attach exactly two files: (1) the course file (topic and lessons) and (2) the whiteboard `SKILL.md`. Paste everything below the line. Nothing else is needed.
+**How to use:** Start a new chat. Attach exactly two files: (1) the course file (topic and lessons) and (2) the whiteboard `SKILL.md` (v4 or later). Paste everything below the line. Optionally add a Supabein TTS token on its own line (`Token: ...`) for a recorded voice. Nothing else is needed.
 
 ---
 
@@ -23,7 +23,7 @@ Your job has two phases:
 | Phase | What you produce | When |
 |---|---|---|
 | A. Narration | One 1-minute marketing narration + one 6 to 8 minute narration per lesson | Immediately, in one turn |
-| B. Animation | One whiteboard animation (HTML) per script | Only when I name the script, one per turn |
+| B. Video | One narrated whiteboard video (MP4) per script, plus the HTML page it is rendered from | Only when I name the script, one per turn |
 
 Do Phase A fully. Then stop and wait for me. Never start Phase B on your own.
 
@@ -45,7 +45,7 @@ Before writing anything:
 | Number of scripts | 1 marketing + 1 per lesson |
 | Format | 16:9 unless I say vertical |
 | Brand colors and logo | Not supplied: use the default whiteboard palette and a handwritten wordmark |
-| Voice | Browser speech (no recorded audio) |
+| Voice | Supabein recorded voice if I give a token; otherwise another engine from the skill; otherwise browser speech in the HTML and a silent, captioned MP4 |
 
 State your assumptions in one line at the end of your reply.
 
@@ -162,10 +162,15 @@ Start Phase B only when I name a script (for example "Do the marketing narration
 3. **Narration.** Use my approved script text. Do not rewrite it unless a line fails the "read aloud" test, and say so if you change anything.
 4. **Beat sheet.** Split into beats of 22 to 35 words, one idea each, 3 to 7 drawn things per beat. Mark each beat organized or loose.
 5. **Assets.** Use any logo or photos I attach (embedded as data URIs, each under 300 KB). Otherwise use a handwritten wordmark. Never hotlink images.
-6. **Build** from the template inside `SKILL.md`.
-7. **Voice.** Browser speech by default. Recorded audio only if I supply or you can truly generate it.
-8. **QA.** Run the skill's `qa.js`, view `contact_sheet.png`, fix every issue, then run the skill's self-critique checklist.
-9. **Deliver.** Save one `.html` in `/mnt/user-data/outputs/` and publish it as an artifact. Do not also present it as a file unless I ask for the file.
+6. **Voice first.** Generate one clip per beat before drawing (skill section 7). With a Supabein token, pass it only as an environment variable for that one command; never write it to a file, the HTML, a log or the reply. No engine: browser speech in the HTML.
+7. **Build** from the template inside `SKILL.md` (it already contains the fast-rendering engine; keep it), set `TIMINGS` and `AUDIO_SRC`, and embed the handwriting font (skill section 6.1).
+8. **QA.** Run the skill's `qa.js`, view `contact_sheet.png`, confirm the handwriting font rendered, fix every issue, then run the skill's self-critique checklist.
+9. **Render the MP4** (skill sections 8.1 and 8.2), in this order:
+   - **My Mac worker**, if the repo has `render-worker/`: post the job with `FAST=true render-worker/submit.sh`, wait with `render-worker/wait.sh` in the background.
+   - **The cloud sandbox**, if no worker claims the job within 3 minutes: run `export.js` in the background, `--fast` unless I ask for the line wobble.
+   - **HTML only**, if video export cannot run at all: name exactly what blocked it and give me the one `export.js` command to run myself.
+   Check one extracted frame of the MP4 before calling it done.
+10. **Deliver.** Send the MP4 as a file first. Save the `.html` too and publish it as an artifact (publish a copy with the document skeleton tags removed). Commit both if you are working in a repository.
 
 ### 3.2 How to build efficiently (do this exactly)
 
@@ -173,7 +178,8 @@ Start Phase B only when I name a script (for example "Do the marketing narration
 2. **Replace only the demo scene.** In the template, the scene begins at the line starting ` /* demo:` and ends just before the line starting ` endBeats();`. Replace those lines with your scene code. Change the page `<title>` and the SVG `aria-label`.
 3. **Write the scene as a list of `beat("...")` calls**, each followed by its drawing commands. Never type times by hand.
 4. **Run QA from a working folder** with Playwright available (set `NODE_PATH` to the global npm root if needed).
-5. **Target a lean file** (about 20 KB or less of scene plus template overhead is fine). No images, speaker notes, transitions or extras unless I ask.
+5. **Target a lean file** (about 20 KB or less of scene plus template overhead is fine; the embedded font and audio come on top). No images, speaker notes, transitions or extras unless I ask.
+6. **Run long jobs in the background** (voice generation, MP4 export, waiting for the Mac) and never block on a foreground timeout.
 
 ### 3.3 Scene toolkit (from the skill)
 
@@ -211,12 +217,12 @@ Start Phase B only when I name a script (for example "Do the marketing narration
 
 ### 3.6 Phase B reply format (short, table-heavy)
 
-1. One line: what was built and the duration.
+1. One line: the MP4 (duration, resolution and size from `ffprobe`), where it was rendered (Mac or cloud) and how long the render took.
 2. A table: beat number, what it covers, what is drawn.
-3. One line on controls: Play, Replay, scrub, speed, captions, Test voice. If the voice is silent, open the page in a browser.
-4. One line of assumptions.
-5. One line on what was **not** made (no MP4, no recorded audio, no logo unless supplied).
-6. The artifact link.
+3. One line on the HTML controls: Play, Replay, scrub, speed, captions, Test voice.
+4. One line of assumptions, including the voice used.
+5. One line on what was **not** made (for example no recorded voice, a silent MP4, no logo unless supplied). If the MP4 could not be made, say so first and name the blocker.
+6. The artifact link for the HTML.
 7. End with: "Tell me which script to animate next."
 
 ## 4. GLOBAL BEHAVIOUR
@@ -224,13 +230,14 @@ Start Phase B only when I name a script (for example "Do the marketing narration
 | Rule | Detail |
 |---|---|
 | Concise | Short replies. Tables over paragraphs. The long content goes in the file, not the chat |
-| Order | Phase A first. Then one animation per turn, only when I name it |
+| Order | Phase A first. Then one video per turn, only when I name it |
 | One thing at a time | Do exactly what this turn asks. Do not start the next step |
 | Questions | Ask only when something is truly missing. Otherwise state assumptions and proceed |
 | No process talk | Do not narrate tool use or internal steps |
-| Honesty | Only claim what exists. If you did not make an MP4 or audio, say so |
+| Honesty | Only claim what exists: report MP4 and audio facts from `ffprobe` only after the export ran. If you did not make an MP4 or audio, say so |
 | Fix over apologise | If something fails, say what failed and fix it |
 | Consistency | Same characters, same palette meaning, same brand spelling across all scripts |
+| Secrets | A TTS token is a password: environment variable for one command only, never in a file, log, commit or reply. Remind me to rotate it if I pasted it in chat |
 
 ## 5. START NOW
 
