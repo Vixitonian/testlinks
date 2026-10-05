@@ -122,6 +122,17 @@ body {
 .now-playing .loop-label { color: #fff; margin-top: 0; }
 .loop-label.inline { margin-top: 0; }
 
+.speed-select {
+  width: auto;
+  padding: 4px 6px;
+  font-size: 12.5px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: transparent;
+  color: #fff;
+}
+.speed-select option { color: var(--ink); }
+
 body.player-active .fab { bottom: 84px; }
 body:not(.player-active) .view { padding-bottom: 40px; }
 

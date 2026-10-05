@@ -119,6 +119,14 @@
     <p id="nowPlayingTitle" class="now-playing-title"></p>
     <div class="now-playing-controls">
       <button id="playPauseBtn" class="icon-btn" aria-label="Play or pause">▶</button>
+      <select id="speedSelect" class="speed-select" aria-label="Playback speed">
+        <option value="0.75">0.75×</option>
+        <option value="1" selected>1×</option>
+        <option value="1.25">1.25×</option>
+        <option value="1.5">1.5×</option>
+        <option value="1.75">1.75×</option>
+        <option value="2">2×</option>
+      </select>
       <label class="loop-label inline"><input type="checkbox" id="loopToggle" /> Loop</label>
       <button id="closePlayerBtn" class="icon-btn" aria-label="Close player">✕</button>
     </div>

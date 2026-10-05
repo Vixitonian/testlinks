@@ -49,6 +49,7 @@
   const nowPlayingBar = $("nowPlayingBar");
   const nowPlayingTitle = $("nowPlayingTitle");
   const playPauseBtn = $("playPauseBtn");
+  const speedSelect = $("speedSelect");
   const loopToggle = $("loopToggle");
   const closePlayerBtn = $("closePlayerBtn");
   const sharedPlayer = $("sharedPlayer");
@@ -100,6 +101,7 @@
     nowPlayingTitle.textContent = row.verse_ref;
     sharedPlayer.src = row.audio_url;
     sharedPlayer.loop = loopToggle.checked;
+    sharedPlayer.playbackRate = Number(speedSelect.value);
     safePlay();
 
     if ("mediaSession" in navigator) {
@@ -133,6 +135,9 @@
   });
   loopToggle.addEventListener("change", () => {
     sharedPlayer.loop = loopToggle.checked;
+  });
+  speedSelect.addEventListener("change", () => {
+    sharedPlayer.playbackRate = Number(speedSelect.value);
   });
   closePlayerBtn.addEventListener("click", closePlayer);
 
