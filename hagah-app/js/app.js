@@ -34,6 +34,10 @@
   const recordStatus = $("recordStatus");
   const narrationPlayer = $("narrationPlayer");
 
+  const edgeVoiceSelect = $("edgeVoiceSelect");
+  const generateVoiceBtn = $("generateVoiceBtn");
+  const generateVoiceStatus = $("generateVoiceStatus");
+
   const musicChoice = $("musicChoice");
   const musicFile = $("musicFile");
   const narrationVolume = $("narrationVolume");
@@ -151,6 +155,7 @@
     narrationPlayer.src = "";
     narrationPlayer.classList.add("hidden");
     recordStatus.textContent = "";
+    generateVoiceStatus.textContent = "";
     musicChoice.value = "default";
     musicFile.value = "";
     musicFile.classList.add("hidden");
@@ -302,11 +307,11 @@
   stopSpeakBtn.addEventListener("click", () => HagahAudio.stopSpeaking());
 
   // ---- Recording ----
-  function setNarration(blob, statusText) {
+  function setNarration(blob, statusEl, statusText) {
     narrationBlob = blob;
     narrationPlayer.src = URL.createObjectURL(blob);
     narrationPlayer.classList.remove("hidden");
-    recordStatus.textContent = statusText;
+    if (statusEl) statusEl.textContent = statusText;
     updateSaveState();
   }
 
@@ -326,7 +331,33 @@
     const blob = await HagahAudio.stopRecording();
     recordBtn.disabled = false;
     stopRecordBtn.disabled = true;
-    setNarration(blob, "Recorded.");
+    setNarration(blob, recordStatus, "Recorded.");
+  });
+
+  // ---- Generate narration (edge-tts) ----
+  function populateEdgeVoices() {
+    edgeVoiceSelect.innerHTML = "";
+    EDGE_TTS_VOICES.forEach((v) => {
+      const opt = document.createElement("option");
+      opt.value = v.id;
+      opt.textContent = v.label;
+      edgeVoiceSelect.appendChild(opt);
+    });
+  }
+
+  generateVoiceBtn.addEventListener("click", async () => {
+    if (!verseList.length) return alert("Add at least one verse first.");
+    generateVoiceBtn.disabled = true;
+    generateVoiceStatus.textContent = "Generating...";
+    try {
+      const blob = await EdgeTTS.synthesize(combinedText(), edgeVoiceSelect.value);
+      setNarration(blob, generateVoiceStatus, "Narration generated.");
+    } catch (err) {
+      generateVoiceStatus.textContent = `Failed: ${err.message}`;
+      console.error(err);
+    } finally {
+      generateVoiceBtn.disabled = false;
+    }
   });
 
   function updateSaveState() {
@@ -527,5 +558,6 @@
   // ---- Init ----
   populateBooks();
   populateVoices();
+  populateEdgeVoices();
   loadNotes();
 })();

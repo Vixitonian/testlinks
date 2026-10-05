@@ -4,4 +4,9 @@
 const HAGAH_CONFIG = {
   projectId: "127",
   token: "sb_pat_...",
+  // Token for the edge-tts narration service at
+  // https://supabein.dxinnovationhub.com/tts/docs — ask the service owner
+  // for one. Only works when the app is served from the same origin
+  // (supabein.dxinnovationhub.com); local dev will hit a CORS error.
+  edgeTtsToken: "",
 };
