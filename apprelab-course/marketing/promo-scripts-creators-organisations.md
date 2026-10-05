@@ -1,6 +1,6 @@
 # Apprelab promo scripts: creators and organisations
 
-Pace 2.4 words per second. Voice: Supabein, en-NG-EzinneNeural. Bracket tags are not spoken. Messaging from `apprelab-positioning.md`.
+Pace 2.4 words per second. Voice: Supabein, en-US-GuyNeural (US English, male). Bracket tags are not spoken. Messaging from `apprelab-positioning.md`.
 
 ## Creators: "Stop teaching in WhatsApp groups" (1 minute)
 
@@ -51,7 +51,7 @@ Training you can prove. Go to Apprelab.com and tap Partner with us.
 | Item | Creators | Organisations |
 |---|---|---|
 | Spoken words | 139 | 137 |
-| Length with voice | 70 s | 67 s |
+| Length with voice | 69 s | 63 s |
 | Big word | REAL PROOF | FINISHED WORK |
 | Camera move | Zoom onto Kemi on "she's tired" | Zoom onto the reports chart |
 | Metaphor | Coins into a jar for "keep 85%" | Attendance sheet vs finished work |
