@@ -33,6 +33,9 @@
   const generateVoiceBtn = $("generateVoiceBtn");
   const generateVoiceStatus = $("generateVoiceStatus");
 
+  const narrationRateRange = $("narrationRateRange");
+  const narrationRateLabel = $("narrationRateLabel");
+
   const musicChoice = $("musicChoice");
   const musicFile = $("musicFile");
   const narrationVolume = $("narrationVolume");
@@ -161,6 +164,8 @@
     musicFile.classList.add("hidden");
     narrationVolume.value = 1;
     musicVolume.value = 0.25;
+    narrationRateRange.value = 1;
+    narrationRateLabel.textContent = "1.0×";
     previewHint.textContent = "Record your voice above, then preview it mixed with music here.";
 
     if (row) {
@@ -350,6 +355,11 @@
     }
   }
 
+  // ---- Narration speed (baked into the saved audio, not just playback) ----
+  narrationRateRange.addEventListener("input", () => {
+    narrationRateLabel.textContent = `${Number(narrationRateRange.value).toFixed(2)}×`;
+  });
+
   // ---- Background music ----
   musicChoice.addEventListener("change", () => {
     musicFile.classList.toggle("hidden", musicChoice.value !== "custom");
@@ -371,6 +381,7 @@
       const duration = await HagahAudio.previewMix(narrationBlob, music, {
         narrationGain: Number(narrationVolume.value),
         musicGain: Number(musicVolume.value),
+        narrationRate: Number(narrationRateRange.value),
       });
       setTimeout(() => {
         previewHint.textContent = "Preview finished. Adjust the volumes above and preview again, or save below.";
@@ -426,6 +437,7 @@
         const mixed = await HagahAudio.mixNarrationWithMusic(narrationBuffer, musicBuffer, {
           narrationGain: Number(narrationVolume.value),
           musicGain: Number(musicVolume.value),
+          narrationRate: Number(narrationRateRange.value),
         });
         saveStatus.textContent = "Encoding...";
         const mp3Blob = HagahAudio.encodeMp3(mixed);

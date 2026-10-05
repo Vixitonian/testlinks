@@ -22,14 +22,17 @@ const HagahAudio = (() => {
   }
 
   // Preview of the actual narration (mic recording or generated voice) mixed
-  // live with the music file, at the same volumes used when saving.
-  async function previewMix(narrationBlob, musicFile, { narrationGain = 1, musicGain = 0.25 } = {}) {
+  // live with the music file, at the same volumes and narration speed used
+  // when saving.
+  async function previewMix(narrationBlob, musicFile, { narrationGain = 1, musicGain = 0.25, narrationRate = 1 } = {}) {
     stopPreview();
     await ctx().resume();
     const narrationBuffer = await decodeBlob(narrationBlob);
+    const effectiveDuration = narrationBuffer.duration / narrationRate;
 
     const narrationSource = ctx().createBufferSource();
     narrationSource.buffer = narrationBuffer;
+    narrationSource.playbackRate.value = narrationRate;
     const narrationNode = ctx().createGain();
     narrationNode.gain.value = narrationGain;
     narrationSource.connect(narrationNode).connect(ctx().destination);
@@ -40,17 +43,17 @@ const HagahAudio = (() => {
       const musicBuffer = await decodeBlob(musicFile);
       const musicSource = ctx().createBufferSource();
       musicSource.buffer = musicBuffer;
-      musicSource.loop = musicBuffer.duration < narrationBuffer.duration;
+      musicSource.loop = musicBuffer.duration < effectiveDuration;
       const musicNode = ctx().createGain();
       musicNode.gain.value = musicGain;
       musicSource.connect(musicNode).connect(ctx().destination);
       musicSource.start(0);
-      musicSource.stop(ctx().currentTime + narrationBuffer.duration);
+      musicSource.stop(ctx().currentTime + effectiveDuration);
       previewSources.push(musicSource);
     }
 
     narrationSource.onended = () => stopPreview();
-    return narrationBuffer.duration;
+    return effectiveDuration;
   }
 
   // ---- Microphone recording (one of the two narration sources) ----
@@ -92,14 +95,15 @@ const HagahAudio = (() => {
     return ctx().decodeAudioData(arrayBuffer);
   }
 
-  async function mixNarrationWithMusic(narrationBuffer, musicBuffer, { narrationGain = 1, musicGain = 0.25 } = {}) {
+  async function mixNarrationWithMusic(narrationBuffer, musicBuffer, { narrationGain = 1, musicGain = 0.25, narrationRate = 1 } = {}) {
     const sampleRate = narrationBuffer.sampleRate;
-    const duration = narrationBuffer.duration;
+    const duration = narrationBuffer.duration / narrationRate;
     const channels = 2;
     const offline = new OfflineAudioContext(channels, Math.ceil(duration * sampleRate), sampleRate);
 
     const narrationSource = offline.createBufferSource();
     narrationSource.buffer = narrationBuffer;
+    narrationSource.playbackRate.value = narrationRate;
     const narrationNode = offline.createGain();
     narrationNode.gain.value = narrationGain;
     narrationSource.connect(narrationNode).connect(offline.destination);
