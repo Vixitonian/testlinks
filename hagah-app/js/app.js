@@ -24,11 +24,6 @@
   const currentAudioBlock = $("currentAudioBlock");
   const playCurrentBtn = $("playCurrentBtn");
 
-  const voiceSelect = $("voiceSelect");
-  const rateRange = $("rateRange");
-  const speakBtn = $("speakBtn");
-  const stopSpeakBtn = $("stopSpeakBtn");
-
   const recordBtn = $("recordBtn");
   const stopRecordBtn = $("stopRecordBtn");
   const recordStatus = $("recordStatus");
@@ -195,7 +190,6 @@
   addNoteBtn.addEventListener("click", () => showEditor(null));
   backBtn.addEventListener("click", () => {
     HagahAudio.stopPreview();
-    HagahAudio.stopSpeaking();
     showList();
   });
 
@@ -282,29 +276,6 @@
       addVerseBtn.textContent = "+ Add verse";
     }
   });
-
-  // ---- Listen (device voice, preview only) ----
-  async function populateVoices() {
-    const voices = await HagahAudio.listVoices();
-    const english = voices.filter((v) => v.lang.startsWith("en"));
-    voiceSelect.innerHTML = "";
-    (english.length ? english : voices).forEach((v) => {
-      const opt = document.createElement("option");
-      opt.value = v.voiceURI;
-      opt.textContent = `${v.name} (${v.lang})`;
-      voiceSelect.appendChild(opt);
-    });
-  }
-
-  speakBtn.addEventListener("click", () => {
-    if (!verseList.length) return alert("Add at least one verse first.");
-    HagahAudio.speak(combinedText(), {
-      rate: Number(rateRange.value),
-      voiceURI: voiceSelect.value,
-    });
-  });
-
-  stopSpeakBtn.addEventListener("click", () => HagahAudio.stopSpeaking());
 
   // ---- Recording ----
   function setNarration(blob, statusEl, statusText) {
@@ -557,7 +528,6 @@
 
   // ---- Init ----
   populateBooks();
-  populateVoices();
   populateEdgeVoices();
   loadNotes();
 })();
