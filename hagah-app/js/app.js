@@ -12,6 +12,7 @@
   const editTitle = $("editTitle");
   const deleteNoteBtn = $("deleteNoteBtn");
 
+  const translationSelect = $("translationSelect");
   const bookSelect = $("bookSelect");
   const chapterSelect = $("chapterSelect");
   const verseStart = $("verseStart");
@@ -204,6 +205,24 @@
   });
 
   // ---- Verse builder ----
+  function populateTranslations() {
+    Bible.TRANSLATIONS.forEach((t) => {
+      const opt = document.createElement("option");
+      opt.value = t.id;
+      opt.textContent = t.label;
+      translationSelect.appendChild(opt);
+    });
+  }
+
+  // Spoken announcement read/generated before each passage, e.g.
+  // "John chapter 3, verse 16." or "Philippians chapter 4, verses 4 to 7."
+  function spokenReference(book, chapter, vStart, vEnd) {
+    const isRange = vEnd && vEnd !== vStart;
+    const verseWord = isRange ? "verses" : "verse";
+    const verseNum = isRange ? `${vStart} to ${vEnd}` : `${vStart}`;
+    return `${book} chapter ${chapter}, ${verseWord} ${verseNum}.`;
+  }
+
   function populateBooks() {
     BIBLE_BOOKS.forEach(([name]) => {
       const opt = document.createElement("option");
@@ -269,14 +288,14 @@
       const chapter = Number(chapterSelect.value);
       const vStart = Number(verseStart.value);
       const vEnd = verseEnd.value ? Number(verseEnd.value) : vStart;
-      const passage = await Bible.fetchPassage(book, chapter, vStart, vEnd);
+      const passage = await Bible.fetchPassage(book, chapter, vStart, vEnd, translationSelect.value);
       verseList.push({
         book,
         chapter,
         verseStart: vStart,
         verseEnd: vEnd,
         reference: passage.reference,
-        text: passage.text,
+        text: `${spokenReference(book, chapter, vStart, vEnd)}\n${passage.text}`,
       });
       renderVerseList();
     } catch (err) {
@@ -544,6 +563,7 @@
   }
 
   // ---- Init ----
+  populateTranslations();
   populateBooks();
   populateEdgeVoices();
   loadNotes();
