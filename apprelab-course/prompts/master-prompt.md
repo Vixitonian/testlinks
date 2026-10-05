@@ -221,12 +221,13 @@ Start Phase B only when I name a script (for example "Do the promo first", "Do L
 6. **Voice first.** Generate one clip per beat before drawing (skill section 7). With a Supabein token, first read https://supabein.dxinnovationhub.com/tts/docs and follow it (endpoint, voice list, limits, errors); pick a voice that suits the audience from its voice list. Pass the token only as an environment variable for that one command; never write it to a file, the HTML, a log or the reply. No engine: browser speech in the HTML.
 7. **Build** from the template inside `SKILL.md` (it already contains the fast-rendering engine; keep it), set `TIMINGS` and `AUDIO_SRC`, and embed the handwriting font (skill section 6.1).
 8. **QA.** Run the skill's `qa.js`, view `contact_sheet.png`, confirm the handwriting font rendered, fix every issue, then run the skill's self-critique checklist.
-9. **Render the MP4** (skill sections 8.1 and 8.2), in this order:
+9. **Add sound** (skill section 7.1): mix sound effects and a ducked music bed with `mix_audio.py`, put the mix into `AUDIO_SRC`, rerun QA once.
+10. **Render the MP4** (skill sections 8.1 and 8.2), in this order:
    - **My Mac worker**, if the repo has `render-worker/`: post the job with `FAST=true render-worker/submit.sh`, wait with `render-worker/wait.sh` in the background.
    - **The cloud sandbox**, if no worker claims the job within 3 minutes: run `export.js` in the background, `--fast` unless I ask for the line wobble.
    - **HTML only**, if video export cannot run at all: name exactly what blocked it and give me the one `export.js` command to run myself.
    Check one extracted frame of the MP4 before calling it done.
-10. **Deliver.** Send the MP4 as a file first. Save the `.html` too and publish it as an artifact (publish a copy with the document skeleton tags removed). Commit both if you are working in a repository.
+11. **Deliver.** Send the MP4 as a file first. Save the `.html` too and publish it as an artifact (publish a copy with the document skeleton tags removed). Commit both if you are working in a repository.
 
 ### 3.2 How to build efficiently (do this exactly)
 
@@ -262,6 +263,7 @@ Start Phase B only when I name a script (for example "Do the promo first", "Do L
 - **Colors, with fixed meaning:** blue = hero or brand, red = problem, green = solution, amber = emphasis. At most 4 accents. Color is never the only signal.
 - **Characters:** reuse the names from the narration, 1 or 2 only. Match the pose and face to the sentence.
 - **Layout guard rails (QA enforces):** keep text 60 px from the edges; keep the bottom 140 px free for captions; no text-on-text or stroke-through-text overlaps; no more than 2 text blocks per vertical band; leave 30 px clearance around rings.
+- **Make it interesting** (skill section 3b): sound effects and music, at least one camera move (`focus()` on an emotional moment), exactly one `big()` word, at least one visual metaphor, a character whose face and pose follow the story, one deliberate pause, and something happening in the first two seconds.
 - **Pacing:** quick, quick, slow. End on a wide, clean board. Finish with the call to action, and draw the spoken brand name or address large when the script has one.
 
 ### 3.5 QA and fixing

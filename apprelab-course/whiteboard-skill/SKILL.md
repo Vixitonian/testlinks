@@ -33,7 +33,8 @@ A viewer watches an idea being built while someone talks. Attention follows the 
 6. **Voice first** (section 7): write the beat strings to `beats.json`, generate one clip per beat (Supabein if a token exists), measure real durations, produce `narration.mp3` + `timings.json`. Do this BEFORE drawing.
 7. **Build** from the template (section 6): set `TIMINGS` and `AUDIO_SRC`, then `beat(text)` and draw. The `beat()` strings must be identical to the strings in `beats.json`, in the same order and count. Never hand-type times.
 8. **Embed the font** (section 6.1), then **QA**: `node qa.js page.html qa`, open `contact_sheet.png`, confirm the handwriting font rendered, fix every issue (including audio overruns), then the checklist (section 9).
-9. **Export the video** (section 8.1): run the capability check, then `node export.js page.html out.mp4 --fps 24 --audio audio/narration.mp3`. Run it in the background for anything over 30 s; check one extracted frame before calling it done. No real audio: export a silent MP4 with burned-in captions (`--captions srt`) and say it is silent.
+   **Then add sound** (section 7.1): `python3 mix_audio.py audio/narration.mp3 qa/sfx.json audio/mixed.mp3`, put `mixed.mp3` into `AUDIO_SRC` (TIMINGS stay the same) and use it for the export. Skip only if the user asks for voice only.
+9. **Export the video** (section 8.1): run the capability check, then `node export.js page.html out.mp4 --fps 24 --audio audio/mixed.mp3`. Run it in the background for anything over 30 s; check one extracted frame before calling it done. No real audio: export a silent MP4 with burned-in captions (`--captions srt`) and say it is silent.
 10. **Deliver.** The MP4 first (send it as a file), plus the `.html` in `/mnt/user-data/outputs/` (publish the HTML as an artifact if the Artifact tool exists, else `present_files`). **Fallback:** if the capability check fails or the export errors, deliver the HTML only and say in one line exactly what blocked the video (for example "no ffmpeg" or "Chromium cannot launch") and how the user can export it on their own machine with the same `export.js` command.
 
 ## 2. Narration first: story, not script
@@ -61,6 +62,11 @@ Write it for the ear. Aim: the viewer leans in, understands, remembers, acts. Ne
 - Spell for TTS: write "Apprelab.com", numbers as spoken ("forty hours"), no symbols or abbreviations.
 - Board text is 1–4 words; the voice carries sentences.
 
+**Openings and cuts for social video**
+- The first two seconds decide whether anyone keeps watching. Open mid-action on the trouble ("Nobody bought it."), never on an introduction or a logo.
+- For Reels, TikTok and WhatsApp Status, also offer a 15 to 30 second cut: one idea, the hook, the turn, the call to action. Write it as its own narration rather than chopping the long one.
+- Plan callbacks across a series: the same character, the same prop (a purse, a bulb, a jar) and the same catchphrase come back in every video, so viewers recognise it instantly.
+
 **Tests before drawing:** read aloud at pace (does it breathe?); close your eyes (does it still make sense?); could each beat be a single drawn scene?
 
 ## 3. Visual language: spine and scatter
@@ -84,6 +90,25 @@ Structure where the idea is a structure; spontaneity where it is a story. Mix bo
 
 **Layout guard rails (QA enforces):** text 60 px from edges; nothing in the caption zone (bottom 140 px of the current view); no text/text, text/picture or stroke/text collisions; 2 text blocks per vertical band; ring clearance 30 px.
 
+## 3b. Make it interesting (use on every video)
+
+A clean board is not enough. Each video should use most of these; the self-critique checklist (section 9) checks them.
+
+| Technique | How (toolkit) | Rule of thumb |
+|---|---|---|
+| **Sound design** | Automatic: a soft marker scribble under every `Wr`, a pop when an icon lands, a whoosh on every `{wipe:true}`. Explicit: `sfx('ding' | 'pop' | 'whoosh' | 'boing' | 'cash')` at the cursor. Music bed ducked under the voice. All mixed by `mix_audio.py` (section 7.1) | Always on unless the user asks for voice only. Use a real royalty-free track (`--music`) when the user supplies one or a licence clearly allows it; otherwise the generated pad |
+| **Camera moves** | `cam(x,y,w)` right after `beat()`; `focus(box)` zooms mid-beat onto any drawn thing (a text's `.box`, an icon's return value, a figure's `.it.box`); `camBack()` pulls back. A zoom resets automatically at the next board | One zoom per one or two beats, on emotion (a sad face, the price, the result). Never during a stroke; end every video on the wide board |
+| **One big word** | `big("ASLEEP", C.r)`: huge handwritten word, highlighter swipe and a ding | Once per video, on the turn or the key number. Two or more cancels the effect |
+| **Characters that act** | `figure()` then `.pose('shrug'|'think'|'cheer'|'wave'|'point'|'walk', {expr})`, `.go(x,y,secs)` to walk in or out | The face and pose change with the sentence: slump on the problem, light up on the turn. Bring the same character back across the series |
+| **Visual metaphors** | Draw the idea instead of naming it: coins into a `jar` for earnings, a `web` on an idle `bulb`, a `door` for a way out, a `bag` or `cash` for money, an `envelope` for messages, a rising `chart` for growth, a `hand` for help | At least one metaphor per video. A picture that says the idea beats a word that labels it |
+| **Fuller boards** | Use the space between the headline and the caption zone: a small side scene, the character reacting, a doodle mark | No board more than half empty at its end frame, but never more than 2 text blocks per vertical band |
+| **Change of pace** | Fast scribbles for the problem (`Wr(...,{speed:.035})`), slow careful drawing for the solution (`{speed:.08}`), `hold(.6)` for a beat of silence before the reveal | Quick, quick, slow; one deliberate pause per video |
+| **Callbacks** | Reuse the same prop and colour from video to video (record them in the narration notes) | The opening prop returns, changed, at the end (the dark bulb lights up) |
+| **Brand look** | The user's logo via `pic(name,...,{frame:'sticker'})` (prepare with `prep_asset.py`), brand colours via `THEMES`, a 2 second logo reveal at the start or end, the website drawn large with `big()` or `U(Wr())` at the end | Ask for the logo and colours once; until then a handwritten wordmark |
+| **Real photos** | `pic(name,cx,cy,w,{frame:'polaroid',style:'poster'})` for a real market stall, a product, an app screenshot; label it by hand with an arrow | 1 or 2 per video, never wallpaper |
+| **Burned-in captions** | `export.js --captions srt` | For any video meant for social feeds, which autoplay muted |
+| **Vertical 9:16** | `?fmt=vertical`; lay the scene out with fractions of `W` and `H`; export with `--query "?fmt=vertical"` | A separate layout, not a squeezed 16:9 |
+
 ## 4. Assets: real images, stickers, logos
 
 - **Where from.** User uploads in `/mnt/user-data/uploads`. The sandbox usually has no network, and published pages cannot load remote images, so every image must be embedded as a `data:` URI. Web or image-search results can be looked at but not embedded; ask for the logo, product screenshots and photos instead of hotlinking or guessing. No logo yet: write the name as a handwritten wordmark with `Wr()`.
@@ -92,7 +117,7 @@ Structure where the idea is a structure; spontaneity where it is a story. Mix bo
   - `frame:'polaroid'` white print with shadow (photos, screenshots); `'tape'` taped on with hand-drawn border; `'none'`; `'sticker'` white cut-out outline for transparent PNGs and logos.
   - `style:'poster'` ink-wash look so photos match the doodles. Use it when the photo clashes with the line art.
 - Real images are punctuation, not wallpaper: 1–2 per beat, with a handwritten label and an arrow or ring.
-- **Built-in stickers** (`icon(name,x,y,scale)`, scale 2 = 200 px): book film speaker note phone coin bulb person check star clock heart house cloud sun gear mic camera chat search rocket trophy lock key flag pencil laptop badge megaphone calendar pin tree mountain smile bolt graph target coffee. Add more in the same 100x100 format. **Marks:** burst sparkle squig spiral.
+- **Built-in stickers** (`icon(name,x,y,scale)`, scale 2 = 200 px): book film speaker note phone coin bulb person check star clock heart house cloud sun gear mic camera chat search rocket trophy lock key flag pencil laptop badge megaphone calendar pin tree mountain smile bolt graph target coffee jar door web bag envelope cash chart hand. Add more in the same 100x100 format. **Marks:** burst sparkle squig spiral.
 
 ## 5. The hand and the pen
 
@@ -156,7 +181,7 @@ let _s=KIT.seed*977+13;const rnd=()=>{_s=(_s*16807)%2147483647;return(_s-1)/2147
 const rot=(q,a,cx,cy)=>{const r=rad(a),c=Math.cos(r),s=Math.sin(r),dx=q.x-cx,dy=q.y-cy;return{x:cx+dx*c-dy*s,y:cy+dx*s+dy*c}};
 const rotBox=(b,a,cx,cy)=>{if(!a)return b;const P=[[b.x,b.y],[b.x+b.width,b.y],[b.x,b.y+b.height],[b.x+b.width,b.y+b.height]].map(p=>rot({x:p[0],y:p[1]},a,cx,cy)),xs=P.map(p=>p.x),ys=P.map(p=>p.y);return{x:Math.min(...xs),y:Math.min(...ys),width:Math.max(...xs)-Math.min(...xs),height:Math.max(...ys)-Math.min(...ys)}};
 /* ============ 2. ENGINE: items are data, render(t) is a pure function ============ */
-const items=[],BOXED=[],CAM=[{t:0,x:0,y:0,w:W}];let TOOL=KIT.tool;const tool=n=>{TOOL=n};
+const items=[],BOXED=[],CAM=[{t:0,x:0,y:0,w:W}],SFX=[];/* SFX: sound cues {t,type,dur} for mix_audio.py, written to sfx.json by qa.js */let TOOL=KIT.tool;const tool=n=>{TOOL=n};
 const mk=it=>{it.tool=it.tool||TOOL;items.push(it);return it};
 function stroke(d,{start,dur,w=5,color='var(--ink)',ease=E.pen}){const el=document.createElementNS(NS,'path');el.setAttribute('d',d);Object.assign(el.style,{fill:'none',stroke:color,strokeWidth:w,strokeLinecap:'round',strokeLinejoin:'round'});world.appendChild(el);const len=el.getTotalLength()||1;el.style.strokeDasharray=len;
  return mk({el,start,dur,ease,len,kind:'stroke',pos:p=>el.getPointAtLength(len*p),tick:t=>{const p=ease(clamp((t-start)/dur));el.style.strokeDashoffset=len*(1-p);el.style.visibility=p<=0?'hidden':'visible'}})}
@@ -176,7 +201,7 @@ function write(str,x,y,{size=64,start,color='var(--ink)',speed=.055,anchor='midd
  let d=`M${x0} ${top}`;for(let i=0;i<=n;i++){const px=x0+i*step;d+=` L${px} ${i%2?top:bot} L${px+step} ${i%2?top:bot}`}
  if(rotA)t.setAttribute('transform',`rotate(${rotA} ${cx} ${cy})`);
  const pen=p=>({x:x0+p*(n+1)*step,y:y-size*.3+Math.sin(p*b.width/(size*.4))*size*.12});
- const it=reveal(t,d,{start,dur:Math.max(.6,str.length*speed),brush,xf:rotA?{a:rotA,cx,cy}:null,pen});it.box=rotBox({x:b.x,y:b.y,width:b.width,height:b.height},rotA,cx,cy);it.str=str;it.size=size;BOXED.push(it);return it}
+ const it=reveal(t,d,{start,dur:Math.max(.6,str.length*speed),brush,xf:rotA?{a:rotA,cx,cy}:null,pen});it.box=rotBox({x:b.x,y:b.y,width:b.width,height:b.height},rotA,cx,cy);it.str=str;it.size=size;BOXED.push(it);SFX.push({t:start,type:'write',dur:it.dur});return it}
 /* ---- hand-drawn annotation primitives ---- */
 const loop=(cx,cy,rx,ry,{start,dur=.9,color='#D64545',w=6,seed=3})=>{let d='';for(let i=0;i<=56;i++){const a=-2.6+i/56*Math.PI*2.25,k=1+.035*(i/56)+.012*Math.sin(seed+i*.9);d+=(i?' L':'M')+(cx+Math.cos(a)*rx*k).toFixed(1)+' '+(cy+Math.sin(a)*ry*k).toFixed(1)}return stroke(d,{start,dur,w,color})};
 const underline=(b,{start,color='#E8A317'})=>{const y=b.y+b.height+6,x0=b.x-6,x1=b.x+b.width+6;return stroke(`M${x0} ${y} Q${(x0+x1)/2} ${y+10} ${x1} ${y-3}`,{start,dur:.5,w:8,color})};
@@ -194,6 +219,10 @@ const A=(x1,y1,x2,y2,c=C.k,b=0)=>{arrow(x1,y1,x2,y2,c,at,.35,b);at+=.75};
 const U=i=>{D(underline(i.box,{start:at}));at+=.65;return i},Rg=i=>{const b=i.box;D(loop(b.x+b.width/2,b.y+b.height/2,b.width/2+34,b.height/2+26,{start:at}));at+=1.1;return i};
 const Ck=(x,y,c=C.g)=>S(`M${x} ${y} L${x+30} ${y+40} L${x+90} ${y-50}`,.4,c,9);
 const head=(s,o={})=>U(Wr(s,W/2,170,96,C.k,o));
+/* ---- interest helpers: one big word per video, deliberate pauses, explicit sound cues ---- */
+const sfx=(type,t=at)=>SFX.push({t,type});                      // 'ding' | 'pop' | 'whoosh' | 'boing' | 'cash' at the cursor
+const hold=s=>{at+=s};                                           // a beat of silence on the board before a reveal
+const big=(s,c=C.r,{x=W/2,y=H*.5,size=230,rotA=-3,hl=C.a,sound='ding'}={})=>{const i=Wr(s,x,y,size,c,{rotA,speed:.09});if(hl)HL(i,hl);if(sound)sfx(sound);return i};
 function HL(i,c=C.a){const b=i.box,r=document.createElementNS(NS,'rect');r.setAttribute('x',b.x-8);r.setAttribute('y',b.y+b.height*.22);r.setAttribute('width',b.width+16);r.setAttribute('height',b.height*.6);r.setAttribute('rx',10);r.setAttribute('fill',c);r.setAttribute('fill-opacity','.35');
  const cy=b.y+b.height*.52,h=reveal(r,`M${b.x-30} ${cy} L${b.x+b.width+30} ${cy}`,{start:at,dur:.5,brush:b.height*.9});world.insertBefore(r,i.node);D(h);at+=.6;return i}
 const circle=(x,y,r)=>`M${x-r} ${y} A${r} ${r} 0 1 1 ${x+r} ${y} A${r} ${r} 0 1 1 ${x-r} ${y}`;
@@ -205,12 +234,13 @@ function mark(kind,x,y,s=1,c=C.a){let d='';if(kind==='burst')for(let i=0;i<8;i++
  claim({x:x-60*s,y:y-60*s,width:120*s,height:120*s});return D(S(d,.45,c,4))}
 /* ---- icons / stickers: 100x100 local space, absolute M L Q C Z, or [cx,cy,r] circles ---- */
 const ICON={book:["M10 25 L50 32 L90 25 L90 78 L50 85 L10 78 Z","M50 32 L50 85"],film:["M8 22 L92 22 L92 78 L8 78 Z","M42 38 L42 62 L64 50 Z"],speaker:["M12 38 L32 38 L52 20 L52 80 L32 62 L12 62 Z","M64 38 Q74 50 64 62","M72 28 Q92 50 72 72"],note:["M38 76 L38 24 L82 14 L82 66",[28,76,10],[72,66,10]],phone:["M30 8 L70 8 L70 92 L30 92 Z","M42 82 L58 82"],coin:[[50,50,40],"M50 26 L50 74","M38 38 Q50 28 62 38 Q38 50 62 62 Q50 72 38 62"],bulb:["M50 8 C20 8 14 44 34 58 L34 72 L66 72 L66 58 C86 44 80 8 50 8 Z","M38 82 L62 82","M42 92 L58 92"],person:[[50,24,14],"M50 38 L50 66","M26 50 L50 44 L74 50","M50 66 L32 92","M50 66 L68 92"],check:["M18 52 L40 76 L84 24"],star:["M50 8 L61 38 L93 40 L68 60 L77 92 L50 74 L23 92 L32 60 L7 40 L39 38 Z"],clock:[[50,50,40],"M50 24 L50 50 L68 62"],heart:["M50 86 C10 56 6 24 28 16 C42 11 50 24 50 30 C50 24 58 11 72 16 C94 24 90 56 50 86 Z"],house:["M10 48 L50 14 L90 48","M20 44 L20 88 L80 88 L80 44","M42 88 L42 62 L58 62 L58 88"],cloud:["M26 74 C6 74 6 46 28 46 C30 24 66 20 72 44 C94 42 98 74 76 74 Z"],sun:[[50,50,18],"M50 8 L50 22","M50 78 L50 92","M8 50 L22 50","M78 50 L92 50","M20 20 L30 30","M70 70 L80 80","M80 20 L70 30","M30 70 L20 80"],gear:[[50,50,16],[50,50,30],"M50 8 L50 20","M50 80 L50 92","M8 50 L20 50","M80 50 L92 50","M20 20 L28 28","M72 72 L80 80","M80 20 L72 28","M28 72 L20 80"],mic:["M38 12 L62 12 L62 52 Q62 66 50 66 Q38 66 38 52 Z","M26 44 Q26 78 50 78 Q74 78 74 44","M50 78 L50 92","M36 92 L64 92"],camera:["M8 30 L30 30 L38 18 L62 18 L70 30 L92 30 L92 82 L8 82 Z",[50,56,16]],chat:["M10 14 L90 14 L90 64 L48 64 L26 86 L28 64 L10 64 Z"],search:[[42,42,28],"M62 62 L90 90"],
- rocket:["M50 6 C68 22 72 48 66 70 L34 70 C28 48 32 22 50 6 Z",[50,40,8],"M34 56 L18 78 L36 72","M66 56 L82 78 L64 72","M42 78 L50 96 L58 78"],trophy:["M28 14 L72 14 L68 46 C66 58 34 58 32 46 Z","M28 22 C8 22 8 44 32 46","M72 22 C92 22 92 44 68 46","M50 56 L50 74","M32 88 L68 88 L64 74 L36 74 Z"],lock:["M24 44 L76 44 L76 90 L24 90 Z","M34 44 L34 28 C34 8 66 8 66 28 L66 44",[50,64,6],"M50 70 L50 80"],key:[[28,50,18],"M46 50 L90 50","M76 50 L76 64","M88 50 L88 62"],flag:["M24 10 L24 94","M24 12 C44 4 56 24 80 14 L80 52 C56 62 44 42 24 52"],pencil:["M20 80 L26 62 L76 12 L88 24 L38 74 Z","M26 62 L38 74","M68 20 L80 32"],laptop:["M18 20 L82 20 L82 62 L18 62 Z","M8 70 L92 70 L86 82 L14 82 Z"],badge:[[50,42,28],"M38 42 L47 52 L64 32","M38 64 L30 94 L44 86","M62 64 L70 94 L56 86"],megaphone:["M14 40 L40 40 L80 14 L80 76 L40 52 L14 52 Z","M30 52 L36 76 L48 76 L44 56","M88 34 Q96 45 88 56"],calendar:["M12 22 L88 22 L88 88 L12 88 Z","M12 40 L88 40","M30 12 L30 30","M70 12 L70 30","M28 54 L40 54","M46 54 L58 54","M64 54 L76 54","M28 70 L40 70"],pin:["M50 92 C20 56 20 44 20 38 C20 20 34 8 50 8 C66 8 80 20 80 38 C80 44 80 56 50 92 Z",[50,38,12]],tree:[[50,34,26],"M44 58 L44 92","M56 58 L56 92","M36 92 L64 92"],mountain:["M6 86 L36 30 L52 56 L66 38 L94 86 Z","M28 46 L36 54 L42 44"],smile:[[50,50,40],[36,40,4],[64,40,4],"M30 60 Q50 82 70 60"],bolt:["M58 6 L22 56 L46 56 L38 94 L78 40 L52 40 Z"],graph:["M12 10 L12 88 L92 88","M26 88 L26 64 L40 64 L40 88","M48 88 L48 44 L62 44 L62 88","M70 88 L70 22 L84 22 L84 88"],target:[[50,50,42],[50,50,26],[50,50,8],"M50 50 L86 14"],coffee:["M16 34 L72 34 L68 78 C66 88 24 88 20 78 Z","M72 42 C92 42 92 68 70 68","M32 26 Q26 18 32 10","M48 26 Q42 18 48 10"]};
+ rocket:["M50 6 C68 22 72 48 66 70 L34 70 C28 48 32 22 50 6 Z",[50,40,8],"M34 56 L18 78 L36 72","M66 56 L82 78 L64 72","M42 78 L50 96 L58 78"],trophy:["M28 14 L72 14 L68 46 C66 58 34 58 32 46 Z","M28 22 C8 22 8 44 32 46","M72 22 C92 22 92 44 68 46","M50 56 L50 74","M32 88 L68 88 L64 74 L36 74 Z"],lock:["M24 44 L76 44 L76 90 L24 90 Z","M34 44 L34 28 C34 8 66 8 66 28 L66 44",[50,64,6],"M50 70 L50 80"],key:[[28,50,18],"M46 50 L90 50","M76 50 L76 64","M88 50 L88 62"],flag:["M24 10 L24 94","M24 12 C44 4 56 24 80 14 L80 52 C56 62 44 42 24 52"],pencil:["M20 80 L26 62 L76 12 L88 24 L38 74 Z","M26 62 L38 74","M68 20 L80 32"],laptop:["M18 20 L82 20 L82 62 L18 62 Z","M8 70 L92 70 L86 82 L14 82 Z"],badge:[[50,42,28],"M38 42 L47 52 L64 32","M38 64 L30 94 L44 86","M62 64 L70 94 L56 86"],megaphone:["M14 40 L40 40 L80 14 L80 76 L40 52 L14 52 Z","M30 52 L36 76 L48 76 L44 56","M88 34 Q96 45 88 56"],calendar:["M12 22 L88 22 L88 88 L12 88 Z","M12 40 L88 40","M30 12 L30 30","M70 12 L70 30","M28 54 L40 54","M46 54 L58 54","M64 54 L76 54","M28 70 L40 70"],pin:["M50 92 C20 56 20 44 20 38 C20 20 34 8 50 8 C66 8 80 20 80 38 C80 44 80 56 50 92 Z",[50,38,12]],tree:[[50,34,26],"M44 58 L44 92","M56 58 L56 92","M36 92 L64 92"],mountain:["M6 86 L36 30 L52 56 L66 38 L94 86 Z","M28 46 L36 54 L42 44"],smile:[[50,50,40],[36,40,4],[64,40,4],"M30 60 Q50 82 70 60"],bolt:["M58 6 L22 56 L46 56 L38 94 L78 40 L52 40 Z"],graph:["M12 10 L12 88 L92 88","M26 88 L26 64 L40 64 L40 88","M48 88 L48 44 L62 44 L62 88","M70 88 L70 22 L84 22 L84 88"],target:[[50,50,42],[50,50,26],[50,50,8],"M50 50 L86 14"],coffee:["M16 34 L72 34 L68 78 C66 88 24 88 20 78 Z","M72 42 C92 42 92 68 70 68","M32 26 Q26 18 32 10","M48 26 Q42 18 48 10"],
+ jar:["M30 14 L70 14 L70 24 L30 24 Z","M33 24 C16 32 16 88 30 92 L70 92 C84 88 84 32 67 24"],door:["M24 8 L76 8 L76 94 L24 94 Z","M62 52 L66 52"],web:[[50,50,12],[50,50,26],[50,50,40],"M50 6 L50 94","M6 50 L94 50","M19 19 L81 81","M81 19 L19 81"],bag:["M16 42 L84 42 L78 92 L22 92 Z","M34 42 C34 16 66 16 66 42"],envelope:["M8 24 L92 24 L92 78 L8 78 Z","M8 24 L50 56 L92 24"],cash:["M6 28 L94 28 L94 72 L6 72 Z",[50,50,13],"M16 38 L26 38","M74 62 L84 62"],chart:["M10 90 L90 90","M14 80 L36 58 L52 68 L86 24","M70 24 L86 24 L86 40"],hand:["M30 92 L30 50 C30 42 40 42 40 50 L40 30 C40 22 50 22 50 30 L50 26 C50 18 60 18 60 26 L60 32 C60 24 70 24 70 32 L70 66 C70 82 62 92 50 92 Z"]};
 function xfPath(d,fn){const tk=d.match(/[A-Z]|-?\d*\.?\d+/g);let o='',i=0;while(i<tk.length){const k=tk[i];if(/[A-Z]/.test(k)){o+=k+' ';i++}else{const p=fn(+tk[i],+tk[i+1]);o+=p[0].toFixed(1)+' '+p[1].toFixed(1)+' ';i+=2}}return o}
 function icon(name,x,y,s=2,{c=C.k,dur=.35,rotA=jit(3)}={}){const cx=x+50*s,cy=y+50*s,P=(px,py)=>{const q=rot({x:x+px*s,y:y+py*s},rotA,cx,cy);return[q.x,q.y]};
  claim({x,y,width:100*s,height:100*s});const b={x,y,width:100*s,height:100*s};let first=null;
  for(const e of ICON[name]){const it=Array.isArray(e)?S(circle(...[P(e[0],e[1])[0],P(e[0],e[1])[1],e[2]*s]),dur,c):S(xfPath(e,P),dur,c);first=first||it}
- BOXED.push({start:first.start,box:b,str:'icon:'+name,virt:1});return b}
+ BOXED.push({start:first.start,box:b,str:'icon:'+name,virt:1});SFX.push({t:at-.1,type:'pop'});return b}
 /* put(): icon + label dropped into a free spot (spontaneous placement) */
 function put(name,label,R=REG,{s=2,c=C.k,size=52}={}){const w=100*s+40,h=100*s+100,b=spot(w,h,R),cx=b.x+w/2;icon(name,cx-50*s,b.y,s,{c});Wr(label,cx,b.y+100*s+60,size,c,{maxW:w+60});return b}
 /* ---- speech / thought bubble ---- */
@@ -252,11 +282,14 @@ function pic(name,cx,cy,w,{rotA=jit(3),frame='polaroid',style='',dur=1.2}={}){co
 const CAPS=[],OVERRUN=[];let DURATION=0,cur=null,BEATS=[];
 const speechSecs=txt=>txt.trim().split(/\s+/).length/2.4*1.15+.8;
 const clr=t=>{items.forEach(i=>{if(i.until===undefined)i.until=t});BOXED.forEach(i=>{if(i.until===undefined)i.until=t});USED=[]};
-function wipeBoard(){tool('eraser');const r=document.createElementNS(NS,'rect');['x','y'].forEach(k=>r.setAttribute(k,-20));r.setAttribute('width',W+40);r.setAttribute('height',H+40);r.setAttribute('fill','var(--board)');reveal(r,hatch({x:-20,y:-20,w:W+40,h:H+40},110),{start:at,dur:.9,brush:190});at+=1;tool(KIT.tool)}
+function wipeBoard(){SFX.push({t:at,type:'whoosh'});tool('eraser');const r=document.createElementNS(NS,'rect');['x','y'].forEach(k=>r.setAttribute(k,-20));r.setAttribute('width',W+40);r.setAttribute('height',H+40);r.setAttribute('fill','var(--board)');reveal(r,hatch({x:-20,y:-20,w:W+40,h:H+40},110),{start:at,dur:.9,brush:190});at+=1;tool(KIT.tool)}
 function beat(text,{keep=false,wipe=false}={}){const T=TIMINGS?TIMINGS[CAPS.length]:null,end=T?T.start:(cur?Math.max(cur.start+cur.speech,at)+.4:0);
+ {const lc=CAM[CAM.length-1];if(cur&&!keep&&(lc.w!==W||lc.x||lc.y))CAM.push({t:end,x:0,y:0,w:W})}   // a zoom never leaks into the next board
  if(cur){cur.end=end;if(T&&at>end+.15)OVERRUN.push(`beat ${CAPS.length-1}: drawing runs ${(at-end).toFixed(1)}s past its audio`);if(!keep){if(wipe){go(end);wipeBoard();clr(end+.8)}else clr(end)}}
  cur={start:end,speech:T?T.end-T.start:speechSecs(text),text};CAPS.push(cur);go(Math.max(at,end)+.3)}
-const cam=(x,y,w)=>{CAM.push({t:cur.start,x,y,w:Math.max(w,W/2)});go(Math.max(at,cur.start+.9))};   // call right after beat(): camera moves before any stroke
+const cam=(x,y,w,{now=false}={})=>{const t=now?at:cur.start;CAM.push({t,x,y,w:Math.max(w,W/2)});go(Math.max(at,t+.9))};   // right after beat(): move before any stroke; {now:true}: move at the cursor, mid-beat
+const focus=(b,w=W*.55)=>{w=Math.max(W/2,Math.min(W,w));const h=w*H/W;cam(clamp(b.x+b.width/2-w/2,0,W-w),clamp(b.y+b.height/2-h/2,0,H-h),w,{now:true})};   // zoom onto a drawn box (text .box, icon return, figure .it.box)
+const camBack=()=>cam(0,0,W,{now:true});                          // pull back to the full board
 function endBeats(){cur.end=Math.max(cur.end||0,cur.start+cur.speech,at)+1;DURATION=cur.end;BEATS=CAPS.map((c,i)=>({i,start:c.start,end:c.end,text:c.text}))}
 /* ============ 7. THE HAND: tip is the origin; tools; lean follows motion; tip stays exactly on the ink ============ */
 const TOOLS={marker:{c:'#2F6FDE',cap:'#1E2A3A',n:20,L:112,w:12},pen:{c:'#2B2F36',cap:'#8A8F98',n:22,L:124,w:6},pencil:{c:'#E8A317',cap:'#E9C9A0',n:26,L:116,w:8},chalk:{c:'#F2EFE6',cap:'#F2EFE6',n:4,L:46,w:10},eraser:{c:'#F4F1EA',cap:'#2F6FDE',n:2,L:52,w:26}},TOOLG={};
@@ -287,7 +320,7 @@ const alive=(it,t)=>it.start<=t&&(it.until===undefined||t<it.until),ov=(p,q)=>p.
 function layoutAt(t){const out=[],hit=(p,b)=>p.x>b.x-12&&p.x<b.x+b.width+12&&p.y>b.y-8&&p.y<b.y+b.height+8,bx=BOXED.filter(i=>alive(i,t)),tx=bx.filter(i=>i.str&&!i.virt&&!/^(pic|figure|icon)/.test(i.str)),st=items.filter(i=>i.kind==='stroke'&&!i.decor&&alive(i,t)),c=camAt(t),V={x:c.x,y:c.y,w:c.w,h:c.w*H/W};
  bx.forEach((a,i)=>bx.slice(i+1).forEach(b=>{if(!a.over&&!b.over&&ov(a.box,b.box))out.push(`overlap: "${(a.str||'').slice(0,20)}" vs "${(b.str||'').slice(0,20)}"`)}));
  const VB={x:V.x,y:V.y,width:V.w,height:V.h};tx.forEach(a=>{if(!ov(a.box,VB))return;const lab=a.str.slice(0,24);for(const it of st)for(let k=0;k<=24;k++)if(hit(it.pos(k/24),a.box)){out.push(`stroke crosses text: "${lab}"`);break}
-  if(a.box.y+a.box.height>V.y+V.h-140)out.push(`text in caption zone: "${lab}"`);if(a.box.x<V.x+60||a.box.x+a.box.width>V.x+V.w-60)out.push(`text outside margins: "${lab}"`)});return[...new Set(out)]}
+  if(a.box.y+a.box.height>V.y+V.h-140)out.push(`text in caption zone: "${lab}"`);if(V.w>=W-1&&(a.box.x<V.x+60||a.box.x+a.box.width>V.x+V.w-60))out.push(`text outside margins: "${lab}"`)});return[...new Set(out)]}
 window.__layoutAt=layoutAt;
 /* ============ 9. PLAYBACK, CAPTIONS, NARRATION (Mode A browser voice | Mode B recorded audio) ============ */
 let t=0,playing=false,speed=1,last=0,capOn=true;const play=$('play'),scrub=$('scrub'),cap=$('cap'),vSel=$('voice'),muteBtn=$('mute'),vTest=$('vtest'),vStat=$('vstat'),setStat=s=>{vStat.textContent=s};
@@ -336,7 +369,7 @@ async function main(){try{await document.fonts.load('700 64px Caveat')}catch(e){
  beat("Watch less. Do more. Start with one small task today.",{wipe:true});
  const t1=Wr("Watch less.",W/2,360,130,C.r,{rotA:-3});const t2=Wr("Do more.",W/2,560,150,C.g,{rotA:2});Rg(t2);Wr("Start today",W/2,800,90,C.b);
  endBeats();track=buildTrack();
- scrub.max=DURATION;window.__duration=DURATION;window.__overrun=OVERRUN;BEATS.forEach(b=>{const p=document.createElement('p');p.textContent=b.text;$('tr').appendChild(p)});
+ scrub.max=DURATION;window.__duration=DURATION;window.__overrun=OVERRUN;window.__sfx=()=>SFX.slice().sort((a,b)=>a.t-b.t);BEATS.forEach(b=>{const p=document.createElement('p');p.textContent=b.text;$('tr').appendChild(p)});
  if(matchMedia('(prefers-reduced-motion: reduce)').matches)t=DURATION;render(t);requestAnimationFrame(tick)}
 main();
 </script></body></html>
@@ -380,7 +413,11 @@ No network at all: ask the user for the `.woff2`/`.ttf` (or install `fonts-cavea
 | `bubble(text,cx,cy,{tail})` | Speech bubble |
 | `figure(x,y,h,{color,expr})` + `.pose()` `.go()` | Stickman |
 | `pic(name,cx,cy,w,{frame,style,rotA})` | Real image |
-| `cam(x,y,w)` | Camera move for this beat (w at least W/2, zoom max 2x) |
+| `cam(x,y,w,{now})` | Camera move for this beat (w at least W/2, zoom max 2x); `{now:true}` moves at the cursor, mid-beat |
+| `focus(box,w)` / `camBack()` | Zoom onto a drawn thing mid-beat / pull back to the full board (zooms also reset at the next board) |
+| `big(text,c,{x,y,size,hl,sound})` | The one big word per video: huge text, highlighter swipe, a ding |
+| `hold(secs)` | A deliberate pause before the next drawing |
+| `sfx(type)` | Sound cue at the cursor: ding, pop, whoosh, boing, cash (scribbles, pops and whooshes are added automatically) |
 | `tool(name)` | Pen tool for items created next |
 | `endBeats()` | Finish; then `track=buildTrack()` (already in the demo) |
 
@@ -404,6 +441,87 @@ Query switches: `?theme=chalk|kraft|blueprint` (colors only), `?fmt=vertical` (1
 4. **No engine: give the timed script.** `make_audio.py` writes `narration_script.txt` (one block per beat, one sentence per line) and `narration.srt` with timings from the page, exits 3. **Paste the SRT into the reply** in a code block, tell the user to feed each beat to any TTS (ElevenLabs, Edge TTS online, Google, phone recorder), and to return one clip per beat or one recording (`--split recording.mp3` finds beat gaps by silence; approximate, and it warns when it falls back to word counts).
 5. **Wire audio in (audio first):** write `beats.json` (a plain list of the exact beat strings); run `python3 make_audio.py beats.json audio/`; paste `timings.json` start/end pairs into `TIMINGS`, set `AUDIO_SRC` (relative file, or base64 `data:audio/mpeg;base64,...` under about 10 MB for a published page). Audio is then the master clock; `beat()` takes its windows from `TIMINGS` and the page reports drawings that overrun their audio (`__overrun`, QA lists them). Fix by cutting drawn items or adding words.
 6. **Nothing at all:** the page still ships with Mode A (browser voice) plus captions.
+
+### 7.1 Sound effects and music (after QA, before export)
+
+`qa.js` writes `qa/sfx.json`: every sound cue the scene produced (automatic scribbles, pops and whooshes, plus explicit `sfx()` and `big()` cues) with its time. `mix_audio.py` synthesises each effect with ffmpeg (no downloads), lays them under the narration, adds a music bed that ducks whenever the voice speaks, and writes one mp3 the same length as the page.
+
+```bash
+python3 mix_audio.py audio/narration.mp3 qa/sfx.json audio/mixed.mp3                    # generated soft pad
+python3 mix_audio.py audio/narration.mp3 qa/sfx.json audio/mixed.mp3 --music track.mp3  # the user's track, looped
+```
+Options: `--no-music`, `--no-sfx`, `--music-vol 0.12`, `--sfx-vol 0.6`. Then set `AUDIO_SRC` to `mixed.mp3` (keep `TIMINGS`), rerun QA once, and export with `--audio audio/mixed.mp3`. Never claim a music licence you have not seen; the generated pad is always safe to use.
+
+```python
+#!/usr/bin/env python3
+"""mix_audio.py narration.mp3 qa/sfx.json OUT.mp3 [--music track.mp3 | --no-music] [--no-sfx] [--music-vol 0.12] [--sfx-vol 0.6]
+
+Mixes the narration with sound effects at the cues the page recorded (qa.js writes sfx.json) and a music bed that
+ducks under the voice. Every effect is synthesised with ffmpeg, so nothing is downloaded. Without --music a soft
+generated pad is used; a real royalty-free track (the user's, or one whose licence allows this use) sounds better.
+Put OUT.mp3 into AUDIO_SRC (TIMINGS stay the same) and pass it to export.js --audio."""
+import json, os, subprocess, sys, tempfile
+
+a = sys.argv[1:]
+opt = lambda k, d=None: a[a.index("--" + k) + 1] if "--" + k in a else d
+flag = lambda k: "--" + k in a
+voice, cues, out = a[0], json.load(open(a[1])), a[2]
+SV, MV = float(opt("sfx-vol", 0.6)), float(opt("music-vol", 0.12))
+D = float(cues["duration"])
+BR = os.environ.get("AUDIO_BITRATE", "96k")
+
+# One synthetic source per effect type (lavfi graphs). {d} = duration for 'write'.
+FX = {
+    "write":  "anoisesrc=c=pink:r=44100:a=0.5:d={d},bandpass=f=2600:width_type=h:w=1800,tremolo=f=9:d=0.8,afade=t=in:d=0.05,afade=t=out:st={fo}:d=0.1,volume={v}",
+    "pop":    "aevalsrc='sin(2*PI*(500+900*t)*t)*exp(-28*t)':s=44100:d=0.18,volume={v}",
+    "ding":   "aevalsrc='(0.7*sin(2*PI*1318.5*t)+0.3*sin(2*PI*2637*t))*exp(-4*t)':s=44100:d=1.2,volume={v}",
+    "whoosh": "anoisesrc=c=pink:r=44100:a=0.6:d=0.8,lowpass=f=1500,afade=t=in:d=0.3,afade=t=out:st=0.3:d=0.5,volume={v}",
+    "boing":  "aevalsrc='sin(2*PI*(220+80*sin(2*PI*8*t))*t)*exp(-5*t)':s=44100:d=0.6,volume={v}",
+    "cash":   "aevalsrc='sin(2*PI*2093*t)*exp(-12*t)+gte(t,0.09)*sin(2*PI*2637*(t-0.09))*exp(-12*(t-0.09))':s=44100:d=0.6,volume={v}",
+}
+LEVEL = {"write": 0.22, "pop": 0.7, "ding": 0.55, "whoosh": 0.5, "boing": 0.5, "cash": 0.5}
+
+# Soft pad: C, Am, F, G, four seconds each; the envelope reaches zero at every chord change, so there are no clicks.
+def chord(i):
+    sel = lambda vals: "if(lt(mod(t,16),4),%s,if(lt(mod(t,16),8),%s,if(lt(mod(t,16),12),%s,%s)))" % vals
+    return sel([("261.63", "220", "174.61", "196"), ("329.63", "261.63", "220", "246.94"), ("392", "329.63", "261.63", "293.66")][i])
+PAD = ("aevalsrc='0.22*pow(sin(PI*mod(t,4)/4),0.6)*(sin(2*PI*({f1})*t)+sin(2*PI*({f2})*t)+sin(2*PI*({f3})*t)+0.6*sin(PI*({f1})*t))':s=44100:d={d},"
+       "lowpass=f=1800,aecho=0.8:0.6:60:0.3").format(f1=chord(0), f2=chord(1), f3=chord(2), d=D)
+
+inputs, chains, labels = ["-i", voice], [], []
+chains.append(f"[0:a]aresample=44100,aformat=channel_layouts=mono,apad,atrim=0:{D},asplit[v][vsc]")
+labels.append("[v]")
+n = 1
+if not flag("no-music"):
+    if opt("music"):
+        inputs += ["-stream_loop", "-1", "-i", opt("music")]
+        chains.append(f"[{n}:a]aresample=44100,aformat=channel_layouts=mono,atrim=0:{D},afade=t=out:st={max(0, D-2)}:d=2,volume={MV}[mus]")
+    else:
+        inputs += ["-f", "lavfi", "-i", PAD]
+        chains.append(f"[{n}:a]afade=t=in:d=2,afade=t=out:st={max(0, D-2)}:d=2,volume={MV}[mus]")
+    chains.append("[mus][vsc]sidechaincompress=threshold=0.015:ratio=10:attack=15:release=500[duck]")
+    labels.append("[duck]"); n += 1
+else:
+    chains.append("[vsc]anullsink")
+if not flag("no-sfx"):
+    for e in cues["events"]:
+        kind = e.get("type")
+        if kind not in FX or e["t"] >= D: continue
+        d = max(0.3, min(float(e.get("dur", 0.6)), 6))
+        inputs += ["-f", "lavfi", "-i", FX[kind].format(d=d, fo=max(0, d-0.1), v=LEVEL[kind] * SV)]
+        ms = int(max(0, e["t"]) * 1000)
+        chains.append(f"[{n}:a]aformat=channel_layouts=mono,adelay={ms}[s{n}]")
+        labels.append(f"[s{n}]"); n += 1
+chains.append("".join(labels) + f"amix=inputs={len(labels)}:normalize=0:duration=longest,alimiter=limit=0.95,atrim=0:{D}[out]")
+
+with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as g: g.write(";\n".join(chains)); graph = g.name
+r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *inputs, "-filter_complex_script", graph, "-map", "[out]",
+                    "-ac", "1", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", BR, out], capture_output=True, text=True)
+os.remove(graph)
+if r.returncode: sys.exit("mix failed: " + r.stderr[-800:])
+print(f"wrote {out}: {D:.1f} s, {len(labels) - (2 if not flag('no-music') else 1)} sound effects, music: "
+      + ("none" if flag("no-music") else (opt("music") or "generated pad")))
+```
 
 ```python
 #!/usr/bin/env python3
@@ -597,7 +715,7 @@ The worker pushes to the branch the job was posted on, so pull before the next c
 
 ```js
 // usage: node qa.js page.html [outDir] ["?fmt=vertical&theme=chalk"]
-// -> outDir/contact_sheet.png, report.json, beats.json (start,end,text per beat). Exit 1 on issues.
+// -> outDir/contact_sheet.png, report.json, beats.json (start,end,text per beat), sfx.json (sound cues for mix_audio.py). Exit 1 on issues.
 const {chromium}=require('playwright'),{execSync}=require('child_process'),fs=require('fs'),path=require('path');
 const [,,file,out='qa',qs='']=process.argv;
 (async()=>{fs.mkdirSync(out,{recursive:true});
@@ -617,7 +735,8 @@ const [,,file,out='qa',qs='']=process.argv;
   if(win>words/2.4*2.2+6)rep.issues.push({beat:i,issue:`long dead air: ${win.toFixed(0)}s window for ${words} words`})}
  over.forEach(m=>rep.issues.push({issue:m}));
  fs.writeFileSync(out+'/report.json',JSON.stringify(rep,null,1));
- fs.writeFileSync(out+'/beats.json',JSON.stringify(beats.map(x=>({start:+x.start.toFixed(2),end:+x.end.toFixed(2),text:x.text})),null,1));await b.close();
+ fs.writeFileSync(out+'/beats.json',JSON.stringify(beats.map(x=>({start:+x.start.toFixed(2),end:+x.end.toFixed(2),text:x.text})),null,1));
+ const sfx=await p.evaluate(()=>window.__sfx?window.__sfx():[]);fs.writeFileSync(out+'/sfx.json',JSON.stringify({duration:+D.toFixed(2),events:sfx},null,1));await b.close();
  const py=`from PIL import Image;import sys
 f=sys.argv[2:];ims=[Image.open(x) for x in f];h=300;ims=[i.resize((int(i.width*h/i.height),h)) for i in ims]
 c=min(4,len(ims));r=-(-len(ims)//c);w=max(i.width for i in ims);s=Image.new('RGB',((w+8)*c,(h+8)*r),'#888')
@@ -682,6 +801,8 @@ Narrated MP4: build with `AUDIO_SRC`/`TIMINGS`, then `node export.js page.html o
 | Audio first | Clips generated before drawing; `TIMINGS` from real durations; `__overrun` empty |
 | Token | Not in any file, the HTML, a log or the reply; env variable only |
 | Video | Capability check run; slice test frame viewed; MP4 exported with real audio (or silent + captions, stated); `ffprobe` numbers reported; on failure the HTML is delivered and the blocker named |
+| Interest | Sound effects and music mixed in; at least one camera move; exactly one `big()` word; at least one visual metaphor; the character's face and pose change with the story; one deliberate pause; no board more than half empty |
+| Hook | Something happens in the first two seconds; no logo or introduction first |
 | Honesty | Reply says what exists (HTML, MP4, audio) and what does not |
 
 ## 10. Common failures
@@ -709,8 +830,9 @@ Narrated MP4: build with `AUDIO_SRC`/`TIMINGS`, then `node export.js page.html o
 - Chalk, kraft and blueprint are color swaps only. Vertical mode renders; scenes must be laid out with fractions of `W` and `H`.
 - The Supabein path has been used against the live service (October 2026). Its docs at `https://supabein.dxinnovationhub.com/tts/docs` are the authority: read them before each use, since endpoints, voices and limits can change.
 - Pacing and hand look were judged from screenshots and timing math, not from watching full playback.
+- Sound effects and the generated music pad are synthesised; they were checked for timing and levels (no clipping), not by ear. A real music track sounds better.
 - Video export was measured in a 4-core container with no GPU: about 0.75 s per frame per worker with the boil filter. GPU or more cores change this a lot.
 
 ## 12. Reply format when delivering
 
-One line on what was built (MP4 duration, resolution and size from `ffprobe`, plus the HTML link); a small table of beats with timings; control hints for the HTML; assumptions in one line; the voice used (Supabein, Edge, browser) and what was not made. If the video could not be exported, say so first, name the blocker, and give the HTML plus the one `export.js` command to run locally. Never print the token. If no audio engine ran, include the SRT block for copy-paste.
+One line on what was built (MP4 duration, resolution and size from `ffprobe`, plus the HTML link); a small table of beats with timings; control hints for the HTML; assumptions in one line; the voice used (Supabein, Edge, browser), the music used (generated pad or the user's track) and what was not made. If the video could not be exported, say so first, name the blocker, and give the HTML plus the one `export.js` command to run locally. Never print the token. If no audio engine ran, include the SRT block for copy-paste.
