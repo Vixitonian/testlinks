@@ -264,7 +264,7 @@ def build_scene(times):
                     9, BLUE, B0 + 2.55, B0 + 3.02))
     strokes.append(("badge_chk", check_path(958, 706, 92, seed=62), 10, BLUE, B0 + 3.02, B0 + 3.16))
 
-    scene.append(TextEl("I’d love your mentorship to scale this.", F_ARCH, 52, INK,
+    scene.append(TextEl("I’d love your mentorship to help us scale.", F_ARCH, 52, INK,
                         C0, C0 + 1.35, 186, 1006, seed=71, jitter=3, rot=2))
     strokes.append(("arrow", wavy((1146, 984), (1382, 988), 2.0, 81), 8, RED, C0 + 1.40, C0 + 1.68))
     strokes.append(("arrow_head", [(1362, 966), (1386, 988), (1362, 1010)], 8, RED, C0 + 1.66, C0 + 1.76))
