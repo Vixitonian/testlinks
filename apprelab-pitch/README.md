@@ -7,7 +7,7 @@ first-principles shape: *question → problem → principle → how the product 
 
 | File | What it is |
 |---|---|
-| `apprelab-pitch.mp4` | The finished 23 s video, 1920×1080, hand + marker + real narration |
+| `apprelab-pitch.mp4` | The finished 22.7 s video, 1280×720 @24fps, hand + marker + real narration (1080p render OOMs on this 1.6 GB box) |
 | `apprelab-pitch.html` | Scrubbable page it is rendered from (open in a browser, press Play) |
 | `apprelab-pitch.srt` | Captions matching the narration |
 | `qa/contact_sheet.png`, `qa/b0*_*.png` | QA frames (two per beat) |
@@ -34,7 +34,7 @@ icon (`brand/apprelab-512.png`, navy `#010A45` + yellow, white "a" under a hard 
 python3 build_page.py                     # page from template + scene + timings + font + logo
 node qa.js apprelab-pitch.html qa         # overlaps, margins, overruns -> qa/report.json
 NODE_PATH=/home/deploy/.npm-global/lib/node_modules \
-  node export.js apprelab-pitch.html apprelab-pitch.mp4 \
+  node export.js apprelab-pitch.html apprelab-pitch.mp4 --workers 1 \
   --audio audio/narration.mp3 --captions apprelab-pitch.srt --workers 4
 ```
 
@@ -46,3 +46,5 @@ Change the words in `beats.json`, then `python3 make_audio.py beats.json audio -
 - Narration is a synthetic US voice (piper `en_US-ryan-medium`); edge-tts was unavailable when this was made.
 - Beat 4 starts drawing ~0.6 s before its line on purpose, so the last stroke lands before the
   narration moves on. QA (`qa.js`) reports 0 overlaps, 0 errors, 0 overruns at the committed revision.
+
+Open `apprelab-pitch.html?t=12.5` to jump straight to a given second of the board.
