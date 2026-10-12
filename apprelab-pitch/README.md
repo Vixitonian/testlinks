@@ -7,7 +7,7 @@ first-principles shape: *question → problem → principle → how the product 
 
 | File | What it is |
 |---|---|
-| `apprelab-pitch.mp4` | The finished 22.7 s video, 1280×720 @24fps, hand + marker + real narration (1080p render OOMs on this 1.6 GB box) |
+| `apprelab-pitch.mp4` | The finished 23.1 s video (21.7 s of narration), 1280×720 @24fps, hand + marker + US male voice (1080p render crashes chromium on this 1.6 GB box) |
 | `apprelab-pitch.html` | Scrubbable page it is rendered from (open in a browser, press Play) |
 | `apprelab-pitch.srt` | Captions matching the narration |
 | `qa/contact_sheet.png`, `qa/b0*_*.png` | QA frames (two per beat) |
@@ -38,12 +38,26 @@ NODE_PATH=/home/deploy/.npm-global/lib/node_modules \
   --audio audio/narration.mp3 --captions apprelab-pitch.srt --workers 4
 ```
 
-Change the words in `beats.json`, then `python3 make_audio.py beats.json audio --engine piper --gap .35 --lead .4`
+Change the words in `beats.json`, then
+```bash
+PIPER_LENGTH=0.95 PIPER_MODEL=.voices/en_US-ryan-high.onnx \
+  python3 make_audio.py beats.json audio --engine piper --voice en_US-ryan-high --gap .35 --lead .4
+```
 (piper voice `en_US-ryan-medium`; `edge_tts` also works when the service is up) and re-run the steps above.
 
 ## Notes / limits
 
-- Narration is a synthetic US voice (piper `en_US-ryan-medium`); edge-tts was unavailable when this was made.
+- Narration is a synthetic **US male** voice: piper `en_US-ryan-high` (length scale 0.95 → 21.7 s read).
+  The voice model is not committed (120 MB); fetch it once with:
+  `mkdir -p .voices && curl -L -o .voices/en_US-ryan-high.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx`
+  plus the same URL `+ ".json"` for the config (without a valid config piper reports "NO AUDIO ENGINE AVAILABLE").
+- Why not the other engines (tested 2026-10-12 from this server):
+  - **Supabein TTS** (first choice in the skill): the API accepts the token, but its upstream returns
+    `403 ... wss://speech.platform.bing.com` because Microsoft blocks that host — nothing to fix on our side.
+    Retry later with `SUPABEIN_TOKEN=... python3 make_audio.py beats.json audio --engine supabein --voice en-US-AndrewNeural`.
+  - **Edge TTS**: same 403 from this box (`WSServerHandshakeError`), even on the newest edge-tts.
+- Render tip: chromium crashes on this box with a full `/tmp`; run the exporter with
+  `TMPDIR=<project>/.tmp` and `--disable-dev-shm-usage` in the launch args.
 - Beat 4 starts drawing ~0.6 s before its line on purpose, so the last stroke lands before the
   narration moves on. QA (`qa.js`) reports 0 overlaps, 0 errors, 0 overruns at the committed revision.
 
