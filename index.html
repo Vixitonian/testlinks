@@ -11,6 +11,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
+  <!-- Preload Critical Frame Template -->
+  <link rel="preload" as="image" href="assets/frame-overlay-std.webp" type="image/webp" fetchpriority="high">
+
   <!-- Local Cropper.js CSS -->
   <link rel="stylesheet" href="assets/cropper.min.css">
 
@@ -199,6 +202,48 @@
       display: block;
       object-fit: contain;
       pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease-in;
+    }
+
+    #renderCanvas.ready {
+      opacity: 1;
+    }
+
+    /* Template Preloader Skeleton */
+    .flyer-loader {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: var(--gold-light);
+      font-size: 0.82rem;
+      font-weight: 600;
+      background: radial-gradient(circle at center, #0e172c 0%, #050811 100%);
+      z-index: 5;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+      pointer-events: none;
+    }
+
+    .flyer-loader.hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid rgba(212, 175, 55, 0.2);
+      border-top-color: var(--gold-primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
 
     /* Tappable Photo Area Hotspot */
@@ -220,6 +265,11 @@
       border-radius: 6px;
       z-index: 10;
       transition: all 0.25s ease;
+      opacity: 0;
+    }
+
+    #photoHotspot.ready {
+      opacity: 1;
     }
 
     #photoHotspot.full-mode {
@@ -679,6 +729,12 @@
     <!-- Center Flyer Display (Dynamic Aspect Ratio, 100% Non-Scrollable) -->
     <main>
       <div class="flyer-wrapper" id="flyerWrapper">
+        <!-- Template Loader Skeleton -->
+        <div class="flyer-loader" id="flyerLoader">
+          <div class="spinner"></div>
+          <span>Loading Template...</span>
+        </div>
+
         <!-- Live HD Canvas -->
         <canvas id="renderCanvas" width="1080" height="1350"></canvas>
 
@@ -856,16 +912,28 @@
     let flipH = 1;
     let activeCroppedCanvas = null; // Stored cropped canvas
 
-    // Preloaded Overlays
+    // Share message config
+    const EVENT_SHARE_TEXT = "I will be at Night of Glory!!!\n\nCreate yours too @ bit.ly/getnogdp";
+
+    // Preloaded Overlays (Fast WebP format with PNG fallback for instant rendering)
     const overlayStd = new Image();
-    overlayStd.src = 'assets/frame-overlay-std.png';
+    overlayStd.src = 'assets/frame-overlay-std.webp';
+    overlayStd.onerror = () => {
+      if (!overlayStd.src.endsWith('.png')) overlayStd.src = 'assets/frame-overlay-std.png';
+    };
 
     const overlayFull = new Image();
-    overlayFull.src = 'assets/frame-overlay-full.png';
+    overlayFull.src = 'assets/frame-overlay-full.webp';
+    overlayFull.onerror = () => {
+      if (!overlayFull.src.endsWith('.png')) overlayFull.src = 'assets/frame-overlay-full.png';
+    };
 
-    // Sample Demo Image
+    // Sample Demo Image (WebP format with JPG fallback)
     const sampleImage = new Image();
-    sampleImage.src = 'assets/demo-sample.jpg';
+    sampleImage.src = 'assets/demo-sample.webp';
+    sampleImage.onerror = () => {
+      if (!sampleImage.src.endsWith('.jpg')) sampleImage.src = 'assets/demo-sample.jpg';
+    };
 
     // DOM Elements
     const renderCanvas = document.getElementById('renderCanvas');
@@ -945,8 +1013,10 @@
       if (!sampleImage.complete) sampleImage.addEventListener('load', triggerRender);
       if (!overlayFull.complete) overlayFull.addEventListener('load', triggerRender);
 
-      // Render initial state
-      triggerRender();
+      // Render immediately if overlay is already cached
+      if (overlayStd.complete) {
+        triggerRender();
+      }
 
       if (document.fonts && document.fonts.ready) {
         document.fonts.ready.then(triggerRender);
@@ -955,6 +1025,14 @@
 
     // Main Composite Drawing Pipeline
     function renderFlyerComposite() {
+      const overlay = currentMode === 'full' ? overlayFull : overlayStd;
+      const isOverlayReady = overlay.complete && overlay.naturalWidth > 0;
+
+      // Crucial Fix: never render the canvas with only a naked profile photo if template is still loading!
+      if (!isOverlayReady) {
+        return;
+      }
+
       // 1. Clear & Dark Background
       ctx.fillStyle = '#070c18';
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -984,15 +1062,18 @@
       }
 
       // 3. Draw Overlay Frame over photo
-      const overlay = currentMode === 'full' ? overlayFull : overlayStd;
-      if (overlay.complete && overlay.naturalWidth > 0) {
-        ctx.drawImage(overlay, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      }
+      ctx.drawImage(overlay, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
       // 4. Custom Name Badge (if active and in standard mode)
       if (toggleNameBadge.checked && currentMode === 'std') {
         drawCustomNameBadge();
       }
+
+      // 5. Reveal canvas and interactive hotspot together, hide loader
+      renderCanvas.classList.add('ready');
+      photoHotspot.classList.add('ready');
+      const loader = document.getElementById('flyerLoader');
+      if (loader) loader.classList.add('hidden');
     }
 
     // Custom Name Badge Rendering
@@ -1221,7 +1302,7 @@
           await navigator.share({
             files: [file],
             title: 'Night of Glory DP',
-            text: 'I will be at Night of Glory! Create yours too.'
+            text: EVENT_SHARE_TEXT
           });
           showToast('Shared successfully!', '🎉');
           return;
@@ -1241,7 +1322,7 @@
       a.download = 'Night_of_Glory_DP.jpg';
       a.click();
 
-      const waText = encodeURIComponent("I will be at Night of Glory! Here is my official DP.");
+      const waText = encodeURIComponent(EVENT_SHARE_TEXT);
       window.open(`https://api.whatsapp.com/send?text=${waText}`, '_blank');
       showToast('Flyer downloaded! Pick it in WhatsApp.', '📱');
     });
@@ -1256,7 +1337,7 @@
           await navigator.share({
             files: [file],
             title: 'Night of Glory DP',
-            text: 'I will be at Night of Glory!'
+            text: EVENT_SHARE_TEXT
           });
           showToast('Shared successfully!', '🎉');
         } catch (err) {
