@@ -181,8 +181,8 @@
 
     .flyer-wrapper {
       position: relative;
-      width: min(calc(100vw - 24px), calc((100dvh - 165px) * 1080 / 1350));
-      height: min(calc(100dvh - 165px), calc((100vw - 24px) * 1350 / 1080));
+      width: min(calc(100vw - 24px), calc((100dvh - 192px) * 1080 / 1350));
+      height: min(calc(100dvh - 192px), calc((100vw - 24px) * 1350 / 1080));
       max-width: 100%;
       max-height: 100%;
       aspect-ratio: 1080 / 1350;
@@ -321,14 +321,14 @@
     /* Bottom Action Controls Bar */
     footer.bottom-bar {
       flex-shrink: 0;
-      padding: 8px 12px 10px;
+      padding: 6px 12px 8px;
       background: rgba(10, 16, 32, 0.94);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
       border-top: 1px solid rgba(212, 175, 55, 0.25);
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 5px;
       z-index: 20;
     }
 
@@ -423,6 +423,89 @@
 
     .btn-secondary:hover {
       background: rgba(255, 255, 255, 0.14);
+    }
+
+    /* Powered by Dx Innovation Hub Footer Note */
+    .powered-by-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+      font-size: 0.68rem;
+      color: rgba(248, 250, 252, 0.65);
+      padding-top: 1px;
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    .powered-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: rgba(248, 250, 252, 0.85);
+      font-weight: 500;
+    }
+
+    .dx-logo-img {
+      height: 15px;
+      width: auto;
+      object-fit: contain;
+      vertical-align: middle;
+      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+    }
+
+    .powered-dot {
+      color: rgba(212, 175, 55, 0.45);
+      font-size: 0.65rem;
+    }
+
+    .dx-wa-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--gold-light);
+      text-decoration: none;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: rgba(212, 175, 55, 0.08);
+      border: 1px solid rgba(212, 175, 55, 0.22);
+    }
+
+    .dx-wa-link:hover, .dx-wa-link:active {
+      color: #fff;
+      background: rgba(37, 211, 102, 0.18);
+      border-color: rgba(37, 211, 102, 0.5);
+    }
+
+    .dx-wa-link svg {
+      color: #25D366;
+      flex-shrink: 0;
+    }
+
+    .dx-wa-text-mobile {
+      display: none;
+    }
+
+    @media (max-width: 520px) {
+      .powered-by-row {
+        font-size: 0.63rem;
+        gap: 2px 6px;
+      }
+      .dx-logo-img {
+        height: 13px;
+      }
+      .dx-wa-text-full {
+        display: none;
+      }
+      .dx-wa-text-mobile {
+        display: inline;
+      }
+      .dx-wa-link {
+        padding: 1px 5px;
+      }
     }
 
     /* Hidden File Input */
@@ -773,6 +856,25 @@
         <button type="button" class="btn btn-secondary" id="btnShareNative" title="Share via other apps">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
         </button>
+      </div>
+
+      <!-- Powered by Dx Innovation Hub Row -->
+      <div class="powered-by-row">
+        <div class="powered-brand">
+          <span>Powered by</span>
+          <img src="assets/dx-logo.png" alt="Dx Innovation Hub" class="dx-logo-img">
+          <span style="font-weight: 600; color: #fff;">Dx Innovation Hub</span>
+        </div>
+        <span class="powered-dot">•</span>
+        <a href="https://wa.me/2348144202252?text=Hello%20Dx%20Innovation%20Hub%2C%20I%20need%20custom%20digital%20solutions%20for%20my%20brand%2Fbusiness." 
+           target="_blank" 
+           rel="noopener noreferrer" 
+           class="dx-wa-link"
+           title="WhatsApp: +2348144202252 — Custom digital solutions for your brand/business">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.311.045-.698.056-1.118-.082-.26-.086-.593-.198-1.01-.382-1.782-.786-2.937-2.607-3.027-2.727-.089-.12-1.724-2.296-1.724-4.38 0-2.085 1.085-3.109 1.472-3.535.387-.426.843-.533 1.127-.533.283 0 .567.004.814.015.263.012.614-.1.96.732.358.864 1.224 2.991 1.332 3.213.109.222.181.482.036.77-.145.289-.218.469-.434.723-.217.254-.455.568-.651.763-.217.216-.443.45-.19.885.253.435 1.127 1.862 2.42 3.013 1.666 1.484 3.069 1.944 3.504 2.161.434.218.687.182.94-.109.254-.29 1.085-1.266 1.374-1.7.289-.435.578-.362.976-.217.398.145 2.529 1.193 2.963 1.411.434.217.723.326.832.508.109.182.109 1.053-.035 1.458z"/></svg>
+          <span class="dx-wa-text-full">Need custom digital solutions? +2348144202252</span>
+          <span class="dx-wa-text-mobile">Custom solutions? +2348144202252</span>
+        </a>
       </div>
     </footer>
 
