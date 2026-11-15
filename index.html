@@ -250,12 +250,12 @@
     #photoHotspot {
       position: absolute;
       /* Default Standard Window coordinates in percentages:
-         x: 288/1080 = 26.666%, y: 215/1350 = 15.926%,
-         w: 503/1080 = 46.574%, h: 466/1350 = 34.518% */
-      left: 26.666%;
-      top: 15.926%;
-      width: 46.574%;
-      height: 34.518%;
+         x: 292/1080 = 27.037%, y: 212/1350 = 15.704%,
+         w: 498/1080 = 46.111%, h: 425/1350 = 31.481% */
+      left: 27.037%;
+      top: 15.704%;
+      width: 46.111%;
+      height: 31.481%;
       cursor: pointer;
       display: flex;
       flex-direction: column;
@@ -273,8 +273,8 @@
     }
 
     #photoHotspot.full-mode {
-      /* Full window mode: h: 614/1350 = 45.481% */
-      height: 45.481%;
+      /* Full window mode: h: 564/1350 = 41.778% */
+      height: 41.778%;
     }
 
     /* Tap hint badge on flyer photo */
@@ -980,32 +980,32 @@
     const CANVAS_HEIGHT = 1350;
 
     // Standard Window: photo sits in white box, name badge stays below
-    // x: 288, y: 215, width: 503, height: 466
+    // x: 292, y: 212, width: 498, height: 425
     const STD_BOX = {
-      x: 288,
-      y: 215,
-      width: 503,
-      height: 466,
-      aspectRatio: 503 / 466 // ~1.079
+      x: 292,
+      y: 212,
+      width: 498,
+      height: 425,
+      aspectRatio: 498 / 425 // ~1.1718
     };
 
     // Full Window: photo spans through badge area down to bottom border
-    // x: 288, y: 215, width: 503, height: 614
+    // x: 292, y: 212, width: 498, height: 564
     const FULL_BOX = {
-      x: 288,
-      y: 215,
-      width: 503,
-      height: 614,
-      aspectRatio: 503 / 614 // ~0.819
+      x: 292,
+      y: 212,
+      width: 498,
+      height: 564,
+      aspectRatio: 498 / 564 // ~0.8830
     };
 
     // Badge coordinates for custom name rendering:
-    // x: 288, y: 691, width: 503, height: 139
+    // x: 292, y: 647, width: 498, height: 125
     const BADGE_BOX = {
-      x: 288,
-      y: 691,
-      width: 503,
-      height: 139
+      x: 292,
+      y: 647,
+      width: 498,
+      height: 125
     };
 
     // State
