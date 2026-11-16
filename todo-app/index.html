@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Todo App</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="card">
+    <header class="top">
+      <h1>My Todos</h1>
+      <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
+    </header>
+
+    <form id="todo-form" class="add-form">
+      <input type="text" id="todo-input" placeholder="What needs to be done?" autocomplete="off" maxlength="200" aria-label="New todo" required>
+      <input type="date" id="todo-due" aria-label="Due date (optional)">
+      <select id="todo-prio" aria-label="Priority">
+        <option value="0">No priority</option>
+        <option value="1">Low</option>
+        <option value="2">Medium</option>
+        <option value="3">High</option>
+      </select>
+      <button type="submit">Add</button>
+    </form>
+
+    <div class="toolbar">
+      <div class="filters" role="group" aria-label="Filter todos">
+        <button class="filter active" data-filter="all">All</button>
+        <button class="filter" data-filter="active">Active</button>
+        <button class="filter" data-filter="done">Done</button>
+      </div>
+      <input type="search" id="search" placeholder="Search…" aria-label="Search todos">
+    </div>
+
+    <ul id="todo-list" class="todo-list"></ul>
+    <p id="empty-msg" class="empty"></p>
+
+    <footer class="footer">
+      <label class="mark-all"><input type="checkbox" id="mark-all"> <span id="count"></span></label>
+      <button id="clear-done" type="button">Clear completed</button>
+    </footer>
+  </main>
+  <div id="toast" class="toast" role="status" hidden>
+    <span id="toast-msg"></span> <button id="toast-undo" type="button">Undo</button>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
