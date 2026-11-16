@@ -1,7 +1,7 @@
-# Apprelab whiteboard pitch (10 s)
+# Apprelab whiteboard pitch (20 s)
 
-Hand-drawn style whiteboard animation pitching **apprelab.com** to a potential mentor.
-1920x1080, 30 fps, exactly 10.00 s, with voice-over.
+Hand-drawn whiteboard pitch to a potential mentor, built around the first principle that learning matters when people can do the work and prove it.
+20 seconds · 1280×720 MP4 at 24 fps · self-contained scrubbable HTML, 30 fps, exactly 10.00 s, with voice-over.
 
 ## Result
 `out/apprelab-whiteboard-pitch-10s.mp4`
