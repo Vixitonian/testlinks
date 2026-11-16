@@ -1,0 +1,6 @@
+file '/home/deploy/projects/testlinks-9/demo_parts/s1.mp4'
+file '/home/deploy/projects/testlinks-9/demo_parts/s2.mp4'
+file '/home/deploy/projects/testlinks-9/demo_parts/s3.mp4'
+file '/home/deploy/projects/testlinks-9/demo_parts/s4.mp4'
+file '/home/deploy/projects/testlinks-9/demo_parts/s5.mp4'
+file '/home/deploy/projects/testlinks-9/demo_parts/s6.mp4'
